@@ -29,7 +29,7 @@
   };
 
   const write = (key, value) => localStorage.setItem(key, JSON.stringify(value));
-  const money = (value) => `PHP ${Number(value).toLocaleString()}.00`;
+  const money = (value) => new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" }).format(value);
   const byId = (id) => document.getElementById(id);
   const roleLabels = {
     guest: "Guest",
@@ -37,7 +37,8 @@
     buyer: "Buyer",
     seller: "Seller"
   };
-  const accountRoles = ["buyer", "seller"];
+  const accountRoles = ["buyer", "seller", "admin"];
+  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["5500", "5501"].includes(location.port) ? "http://localhost:5000/api" : "/api");
   let navOutsideCloseBound = false;
 
   function normalizeAccountRole(role) {
@@ -104,7 +105,7 @@
 
   function roleHome(role) {
     if (role === "admin") return "admin-dashboard.html";
-    if (role === "seller") return "seller-dashboard.html";
+    if (role === "seller") return "admin-dashboard.html";
     return "discover.html";
   }
 
@@ -241,6 +242,7 @@
       { id: "rewards", label: "Rewards", href: "rewards.html" }
     ];
     const sellerLinks = [
+      { id: "catalog", label: "Manage products", href: "admin-dashboard.html" },
       { id: "seller", label: "Dashboard", href: "seller-dashboard.html" },
       { id: "seller-offers", label: "Offers & Services", href: "seller-dashboard.html#sellerOffers" },
       { id: "seller-stock", label: "Stock Control", href: "seller-dashboard.html#sellerStock" },
@@ -251,6 +253,7 @@
 
     if (role === "buyer") items.push(navMenu("buyer", "Buyer", buyerLinks));
     if (role === "seller") items.push(navMenu("seller", "Seller", sellerLinks));
+    if (role === "admin") items.push(navItem("admin", "Admin dashboard", "admin-dashboard.html"));
 
     return items.join("");
   }
@@ -567,11 +570,13 @@
   }
 
   function getProductStock(product) {
+    if (product._id) return Number(product.stock);
     const overrides = getInventoryOverrides();
     return Number(overrides[product.id]?.stock ?? product.stock);
   }
 
   function getProductStatus(product) {
+    if (product._id) return product.status;
     const overrides = getInventoryOverrides();
     const manualStatus = overrides[product.id]?.status;
     const stock = getProductStock(product);
@@ -650,24 +655,24 @@
     return `
       <article class="product-card">
         <div class="product-art">
-          <img src="${product.image}" alt="${product.name}">
+          <img src="${escapeHtml(safeProductImage(product.image))}" alt="${escapeHtml(product.name)}">
         </div>
 
         <div class="product-body">
           <div class="card-row">
-            <span class="pill ${statusClass(status)}">${status}</span>
-            <span class="pill">${product.grade}</span>
+            <span class="pill ${statusClass(status)}">${escapeHtml(status)}</span>
+            <span class="pill">${escapeHtml(product.grade)}</span>
           </div>
 
-          <h3>${product.name}</h3>
-          <p>${product.description}</p>
+          <h3>${escapeHtml(product.name)}</h3>
+          <p>${escapeHtml(product.description || "")}</p>
 
           <div class="card-row">
             <strong>${money(product.price)}</strong>
             <small>${store?.name || "Local store"} · ${stock} left</small>
           </div>
 
-          <button class="primary-btn reserve-btn" data-id="${product.id}" ${status === "Out of Stock" ? "disabled" : ""}>
+          <button class="primary-btn reserve-btn" data-id="${escapeHtml(product.id)}" ${status === "Out of Stock" ? "disabled" : ""}>
             ${status === "Pre-order" ? "Pre-order Kit" : "Reserve Kit"}
           </button>
         </div>
@@ -765,7 +770,7 @@
 
     openModal(`
       <h2>Sale recorded</h2>
-      <p>${item.name} was added as receipt <b>${receipt.id}</b> for ${money(receipt.amount)}.</p>
+      <p>${escapeHtml(item.name)} was added as receipt <b>${receipt.id}</b> for ${money(receipt.amount)}.</p>
       <button class="primary-btn" id="sellerSaleDone" type="button">Done</button>
     `);
     byId("sellerSaleDone")?.addEventListener("click", () => {
@@ -799,7 +804,7 @@
         <article><span>03</span>      <h3>More trust</h3><p>Receipts, QR confirmation, and store profiles make transactions clearer.</p></article>
       </section>
       <section class="section-head"><div><p class="kicker">Featured kits</p><h2>Built for beginners and collectors</h2></div><a class="ghost-btn" href="discover.html">See all</a></section>
-      <section class="product-grid">${DATA.products.slice(0, 3).map(productCard).join("")}</section>
+      <section class="product-grid" id="featuredProducts">${DATA.products.slice(0, 3).map(productCard).join("") || `<div class="empty">No kits listed yet.</div>`}</section>
     `);
     bindReserveButtons();
   }
@@ -807,7 +812,7 @@
   function renderDiscover() {
     shell(`
       ${titleBlock("Product discovery", "Find the right kit faster", "Search by name, grade, skill level, availability, or local store.")}
-      <section class="toolbar"><input id="search" placeholder="Search kits"><select id="grade"><option value="all">All grades</option><option>EG</option><option>HG</option><option>RG</option><option>MG</option></select><select id="skill"><option value="all">All skill levels</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></section>
+      <section class="toolbar"><input id="search" placeholder="Search kits"><select id="grade"><option value="all">All grades</option><option>EG</option><option>HG</option><option>RG</option><option>MG</option><option>PG</option><option>SD</option><option>RE/100</option><option>Other</option></select><select id="skill"><option value="all">All skill levels</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></section>
       <section class="product-grid" id="products"></section>
     `);
 
@@ -1089,7 +1094,7 @@
       });
       byId("receipts").innerHTML = items.map((receipt) => {
         const isClaimed = claimed.includes(receipt.id);
-        return `<article class="receipt-card"><div class="receipt-icon">QR</div><div><span class="pill ${isClaimed ? "" : "green"}">${isClaimed ? "Claimed" : "Ready"}</span>      <h3>${receipt.id}</h3><p>${receipt.store} · ${receipt.items}</p><small>${receipt.date} · ${money(receipt.amount)} · ${receipt.points} pts</small></div><div class="button-stack"><button class="ghost-btn view-receipt" data-id="${receipt.id}">View</button><button class="primary-btn claim-receipt" data-id="${receipt.id}" ${isClaimed ? "disabled" : ""}>Claim</button></div></article>`;
+        return `<article class="receipt-card"><div class="receipt-icon">QR</div><div><span class="pill ${isClaimed ? "" : "green"}">${isClaimed ? "Claimed" : "Ready"}</span>      <h3>${escapeHtml(receipt.id)}</h3><p>${escapeHtml(receipt.store)} · ${escapeHtml(receipt.items)}</p><small>${escapeHtml(receipt.date)} · ${money(receipt.amount)} · ${receipt.points} pts</small></div><div class="button-stack"><button class="ghost-btn view-receipt" data-id="${escapeHtml(receipt.id)}">View</button><button class="primary-btn claim-receipt" data-id="${escapeHtml(receipt.id)}" ${isClaimed ? "disabled" : ""}>Claim</button></div></article>`;
       }).join("") || `<div class="empty">No receipts found.</div>`;
       document.querySelectorAll(".claim-receipt").forEach((button) => button.addEventListener("click", () => claimReceipt(button.dataset.id)));
       document.querySelectorAll(".view-receipt").forEach((button) => button.addEventListener("click", () => showReceipt(button.dataset.id)));
@@ -1113,7 +1118,7 @@
   function showReceipt(id) {
     const receipt = getReceipts().find((item) => item.id === id);
     if (!receipt) return;
-    openModal(`<div class="qr-modal"><div class="fake-qr">${qrPattern(receipt.id)}</div><div><h2>${receipt.id}</h2><p>${receipt.store}</p><p>${receipt.items}</p><p><b>${money(receipt.amount)}</b> · ${receipt.points} pts</p><button class="primary-btn" id="modalClaim">Claim points</button></div></div>`);
+    openModal(`<div class="qr-modal"><div class="fake-qr">${qrPattern(receipt.id)}</div><div><h2>${escapeHtml(receipt.id)}</h2><p>${escapeHtml(receipt.store)}</p><p>${escapeHtml(receipt.items)}</p><p><b>${money(receipt.amount)}</b> · ${receipt.points} pts</p><button class="primary-btn" id="modalClaim">Claim points</button></div></div>`);
     byId("modalClaim").addEventListener("click", () => claimReceipt(receipt.id));
   }
 
@@ -1157,15 +1162,12 @@
     let liveProductsList = [];
     
     try {
-      const response = await fetch("http://localhost:5000/api/products");
-      liveProductsList = await response.json();
-      
-      if (!liveProductsList || liveProductsList.length === 0) {
-        liveProductsList = DATA.products;
-      }
+      const response = await fetch(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${sellerAccount.token}` } });
+      if (!response.ok) throw new Error("Unable to load your store inventory.");
+      liveProductsList = (await response.json()).products;
     } catch (error) {
-      console.error("Failed fetching live products for seller dashboard, using fallback data:", error);
-      liveProductsList = DATA.products;
+      shell(`<section class="info-card dark"><h2>Unable to load your store inventory</h2><p>Check your connection and sign in again if your session expired.</p><a class="primary-btn" href="admin-dashboard.html">Open product catalog</a></section>`);
+      return;
     }
 
     const receipts = getReceipts();
@@ -1240,7 +1242,7 @@
 
     const stockHealth = Math.max(
       0,
-      Math.round(((products.length - lowStockProducts.length) / products.length) * 100)
+      products.length ? Math.round(((products.length - lowStockProducts.length) / products.length) * 100) : 0
     );
 
     const gradeDemand = ["EG", "HG", "RG", "MG"].map((grade) => {
@@ -1279,6 +1281,7 @@
         </div>
 
         <div class="seller-actions">
+          <a class="primary-btn" href="admin-dashboard.html">Add & edit products</a>
           <button class="primary-btn" id="sellerAddSale">Simulate sale + QR receipt</button>
           <button class="ghost-btn" id="sellerResetInventory">Reset stock demo</button>
         </div>
@@ -1312,7 +1315,7 @@
         <article>
           <span>Top demand signal</span>
           <b>${topProduct?.grade || "--"}</b>
-          <small>${topProduct?.name || "No product data yet"}</small>
+          <small>${escapeHtml(topProduct?.name || "No product data yet")}</small>
         </article>
 
         <article>
@@ -1449,9 +1452,9 @@
 
             ${
               demandRows.map((product) => `
-                <form class="seller-table-row seller-stock-form" data-id="${product.id}">
+                <form class="seller-table-row seller-stock-form" data-id="${escapeHtml(product.id)}">
                   <span>
-                    <b>${product.name}</b>
+                    <b>${escapeHtml(product.name)}</b>
                     <small>${product.grade} · ${product.skill}</small>
                   </span>
 
@@ -1460,7 +1463,7 @@
                   </span>
 
                   <span>
-                    <input name="stock" type="number" min="0" value="${product.liveStock}" aria-label="${product.name} stock">
+                    <input name="stock" type="number" min="0" value="${product.liveStock}" aria-label="${escapeHtml(product.name)} stock">
                   </span>
 
                   <span>
@@ -1469,7 +1472,7 @@
                   </span>
 
                   <span class="seller-row-actions">
-                    <button class="ghost-btn seller-view-product" type="button" data-id="${product.id}">View</button>
+                    <button class="ghost-btn seller-view-product" type="button" data-id="${escapeHtml(product.id)}">View</button>
                     <button class="primary-btn" type="submit">Save</button>
                   </span>
                 </form>
@@ -1487,8 +1490,8 @@
           </div>
 
           <ul class="seller-insights">
-            <li><b>Restock first:</b> ${lowStockProducts[0]?.name || "No urgent restock"}</li>
-            <li><b>Best demand:</b> ${topProduct?.name || "No demand data"}</li>
+            <li><b>Restock first:</b> ${escapeHtml(lowStockProducts[0]?.name || "No urgent restock")}</li>
+            <li><b>Best demand:</b> ${escapeHtml(topProduct?.name || "No demand data")}</li>
             <li><b>Inventory risk:</b> ${lowStockProducts.length ? `${lowStockProducts.length} products need attention` : "Stock levels are balanced"}</li>
             <li><b>Promotion idea:</b> Bundle tools with HG kits for beginner buyers.</li>
           </ul>
@@ -1560,7 +1563,7 @@
               activeReservations.slice(0, 5).map((item) => `
                 <div>
                   <span class="pill ${item.status === "Pre-order" ? "yellow" : "green"}">${item.status}</span>
-                  <b>${item.productName}</b>
+                  <b>${escapeHtml(item.productName)}</b>
                   <small>${item.customer} · ${item.store} · ${item.date}</small>
                 </div>
               `).join("") || `<div class="empty">No active reservations.</div>`
@@ -1581,7 +1584,7 @@
               lowStockProducts.map((product) => `
                 <div>
                   <span class="pill red">Request</span>
-                  <b>${product.name}</b>
+                  <b>${escapeHtml(product.name)}</b>
                   <small>${actionFor(product)}</small>
                 </div>
               `).join("") || `
@@ -1667,7 +1670,7 @@
         const targetUrlId = matchedProduct?._id || displayId;
 
         try {
-          const response = await fetch(`http://localhost:5000/api/products/${targetUrlId}`, {
+          const response = await fetch(`${API}/products/${targetUrlId}`, {
             method: "PUT",
             headers: {
               "Content-Type": "application/json",
@@ -1706,8 +1709,8 @@
         if (!product) return;
 
         openModal(`
-          <h2>${product.name}</h2>
-          <p>${product.description}</p>
+          <h2>${escapeHtml(product.name)}</h2>
+          <p>${escapeHtml(product.description || "")}</p>
           <p><b>Status:</b> ${product.liveStatus} · <b>Stock:</b> ${product.liveStock} · <b>Demand score:</b> ${product.demandScore}</p>
           <p><b>Recommended seller action:</b> ${actionFor(product)}</p>
         `);
@@ -1831,7 +1834,7 @@
       };
 
       try {
-        const response = await fetch("http://localhost:5000/api/auth/login", {
+        const response = await fetch(`${API}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -1869,7 +1872,7 @@
       }
 
       try {
-        const response = await fetch("http://localhost:5000/api/auth/register", {
+        const response = await fetch(`${API}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -1905,5 +1908,39 @@
     login: renderAuth
   };
 
-  (pages[page] || renderHome)();
+  function safeProductImage(value) {
+    if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(value || "")) return value;
+    if (/^\.\.\/images\/[\w.-]+\.(png|jpe?g|webp|gif|svg)$/i.test(value || "")) return value;
+    try {
+      const url = new URL(value);
+      if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password) return url.href;
+    } catch { /* Use a placeholder for unsupported photos. */ }
+    return "../images/product-placeholder.svg";
+  }
+
+  async function startPage() {
+    if (["home", "discover"].includes(page)) {
+      DATA.products = [];
+      (pages[page] || renderHome)();
+      const container = byId(page === "home" ? "featuredProducts" : "products");
+      container.innerHTML = `<div class="empty" role="status">Loading products…</div>`;
+      try {
+        const response = await fetch(`${API}/products`, { signal: AbortSignal.timeout(15000), cache: "no-store" });
+        if (!response.ok) throw new Error("Unable to load products");
+        DATA.products = await response.json();
+      } catch {
+        container.innerHTML = `<div class="empty" role="alert">Unable to load products. Check your connection and <button class="ghost-btn" id="retryCatalog">try again</button>.</div>`;
+        byId("retryCatalog").addEventListener("click", startPage);
+        return;
+      }
+    }
+    (pages[page] || renderHome)();
+  }
+
+  document.addEventListener("error", (event) => {
+    if (event.target.matches?.(".product-art img") && !event.target.src.endsWith("/product-placeholder.svg")) {
+      event.target.src = "../images/product-placeholder.svg";
+    }
+  }, true);
+  startPage();
 })();

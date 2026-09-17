@@ -35,15 +35,14 @@ const UserSchema = new mongoose.Schema({
   }
 });
 
-UserSchema.pre("save", async function(next) {
+UserSchema.pre("save", async function() {
   if (this.role === "admin") {
     const existingAdmin = await mongoose.model("User").findOne({ role: "admin" });
     
     if (existingAdmin && existingAdmin._id.toString() !== this._id.toString()) {
-      return next(new Error("Access denied: Only one admin user is allowed in the system."));
+      throw new Error("Access denied: Only one admin user is allowed in the system.");
     }
   }
-  next();
 });
 
 module.exports = mongoose.model("User", UserSchema);

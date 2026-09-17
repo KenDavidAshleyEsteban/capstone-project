@@ -1,17 +1,31 @@
-const express = require("express");
-const router = express.Router();
-const auth = require("../middleware/auth"); // Your existing JWT verification middleware
-const adminOnly = require("../middleware/admin"); // The new admin check
+const router = require('express').Router();
+const auth = require('../middleware/auth');
+const catalogOwner = require('../middleware/catalogOwner');
+const Product = require('../models/Product');
+const User = require('../models/User');
+const { catalogScope } = require('../controllers/productController');
 
-router.get("/dashboard", auth, adminOnly, async (req, res) => {
+router.get('/dashboard', auth, catalogOwner, async (req, res, next) => {
   try {
-    res.status(200).json({ 
-      message: "Welcome to the secure admin panel",
-      adminId: req.user.id 
+    const user = req.catalogOwner;
+    const [products, owners, totalUsers] = await Promise.all([
+      Product.find(catalogScope(user)).sort({ createdAt: -1, _id: -1 }).lean(),
+      user.role === 'admin' ? User.find({ role: { $in: ['admin', 'seller'] } }).select('username storeName').lean() : [user],
+      user.role === 'admin' ? User.countDocuments({}) : Promise.resolve(null)
+    ]);
+    res.set('Cache-Control', 'no-store').json({
+      user: { id: String(user._id), username: user.username, role: user.role, storeName: user.storeName, storeLocation: user.storeLocation },
+      stores: owners.map((owner) => ({ id: String(owner._id), name: owner.storeName || `${owner.username}'s catalog` })),
+      products,
+      stats: {
+        totalUsers,
+        totalProducts: products.length,
+        totalStock: products.reduce((sum, p) => sum + p.stock, 0),
+        lowStock: products.filter((p) => p.stock <= 5).length,
+        inventoryValue: products.reduce((sum, p) => sum + p.price * p.stock, 0)
+      }
     });
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
+  } catch (error) { next(error); }
 });
 
 module.exports = router;

@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { getProducts, updateProductInventory, addProduct } = require('../controllers/productController');
+const { getProducts, updateProduct, addProduct } = require('../controllers/productController');
 const auth = require('../middleware/auth');
+const catalogOwner = require('../middleware/catalogOwner');
 
 router.get('/', getProducts);
 
-router.put('/:id', auth, auth.requireRole('seller'), updateProductInventory);
+router.put('/:id', auth, catalogOwner, updateProduct);
 
-router.post('/', auth, auth.requireRole('seller'), addProduct);
+router.post('/', auth, catalogOwner, addProduct);
 
 module.exports = router;

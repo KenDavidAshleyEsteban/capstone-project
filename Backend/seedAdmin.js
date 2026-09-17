@@ -1,41 +1,34 @@
+const path = require('node:path');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const dotenv = require('dotenv');
 const User = require('./models/User');
 
-const MONGO_URI = "mongodb+srv://tagakiasda_db_user:ouvxUwCd32Q9oJF3@cluster0.23ykcun.mongodb.net/gunpla_db?retryWrites=true&w=majority";
+dotenv.config({ path: path.join(process.cwd(), '.env'), quiet: true });
+dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
 
-console.log("1. Script started...");
-
-const createAdmin = async () => {
-  try {
-    console.log("2. Connecting to MongoDB...");
-    await mongoose.connect(MONGO_URI);
-    console.log('3. Connected successfully!');
-
-    console.log("4. Hashing password...");
-    const hashedPassword = await bcrypt.hash('YourSecureAdminPassword123', 10);
-
-    console.log("5. Upserting admin user in DB...");
-    const adminEmail = 'admin@gunplahub.com';
-
-    // Find by email and update/create to guarantee role is 'admin'
-    await User.findOneAndUpdate(
-      { email: adminEmail },
-      {
-        username: 'MasterAdmin',
-        email: adminEmail,
-        password: hashedPassword,
-        role: 'admin'
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-
-    console.log('6. Admin account synced and created successfully!');
-    process.exit(0);
-  } catch (error) {
-    console.error('ERROR OCCURRED:', error.message);
-    process.exit(1);
+async function createAdmin() {
+  const { MONGODB_URI, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_USERNAME } = process.env;
+  if (!MONGODB_URI || !ADMIN_EMAIL || !ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12
+      || ADMIN_PASSWORD === 'replace-with-a-strong-password') {
+    throw new Error('Set MONGODB_URI, ADMIN_EMAIL, and an ADMIN_PASSWORD of at least 12 characters in Backend/.env.');
   }
-};
+  await mongoose.connect(MONGODB_URI);
+  const existing = await User.findOne({ role: 'admin' });
+  if (existing) {
+    console.log('An admin account already exists. Its credentials were not changed.');
+    return;
+  }
+  await User.create({
+    username: ADMIN_USERNAME || 'StoreAdmin',
+    email: ADMIN_EMAIL,
+    password: await bcrypt.hash(ADMIN_PASSWORD, 12),
+    role: 'admin'
+  });
+  console.log('Admin account created. Sign in from /html/login.html.');
+}
 
-createAdmin();
+createAdmin().catch(() => {
+  console.error('Admin setup failed. Check the required environment values, database access, and whether the email is already registered.');
+  process.exitCode = 1;
+}).finally(() => mongoose.disconnect());

@@ -1,70 +1,54 @@
 const Product = require('../models/Product');
+const User = require('../models/User');
 const mongoose = require('mongoose');
+const { validateProduct, InputError } = require('../utils/productValidation');
 
-const getProducts = async (req, res) => {
+const catalogScope = (user) => user.role === 'admin' ? {} : { storeId: String(user._id) };
+
+async function getProducts(req, res, next) {
   try {
-    const products = await Product.find({});
-    res.status(200).json(products);
-  } catch (error) {
-    res.status(500).json({ message: "Server error fetching products", error: error.message });
-  }
-};
+    res.json(await Product.find({}).sort({ createdAt: -1, _id: -1 }));
+  } catch (error) { next(error); }
+}
 
-const updateProductInventory = async (req, res) => {
+async function validateStore(storeId, user, existing) {
+  if (user.role !== 'admin') {
+    if (storeId !== String(user._id)) throw new InputError('Products must belong to your store.', 'storeId');
+    return;
+  }
+  // Preserve legacy store slugs on existing products. New assignments use account IDs.
+  if (existing && storeId === existing.storeId) return;
+  const owner = mongoose.isObjectIdOrHexString(storeId)
+    ? await User.findOne({ _id: storeId, role: { $in: ['seller', 'admin'] } }) : null;
+  if (!owner) throw new InputError('Choose an existing store owner.', 'storeId');
+}
+
+async function addProduct(req, res, next) {
   try {
-    const { stock, status } = req.body;
-    const productId = req.params.id;
+    const user = req.catalogOwner;
+    const body = { ...req.body };
+    if (user.role === 'seller') {
+      if (body.storeId && body.storeId !== String(user._id)) throw new InputError('Products must belong to your store.', 'storeId');
+      body.storeId = String(user._id);
+    } else body.storeId ??= String(user._id);
+    const data = validateProduct(body);
+    await validateStore(data.storeId, user);
+    const product = await Product.create(data);
+    res.status(201).json(product);
+  } catch (error) { next(error); }
+}
 
-    console.log(`[Inventory Update Request] ID received: ${productId} | Stock payload:`, stock);
+async function updateProduct(req, res, next) {
+  try {
+    const id = req.params.id;
+    const identity = mongoose.isObjectIdOrHexString(id) ? { $or: [{ _id: id }, { id }] } : { id };
+    const product = await Product.findOne({ ...identity, ...catalogScope(req.catalogOwner) });
+    if (!product) return res.status(404).json({ message: 'Product not found in your catalog.' });
+    const data = validateProduct(req.body, product);
+    await validateStore(data.storeId, req.catalogOwner, product);
+    Object.assign(product, data);
+    res.json(await product.save());
+  } catch (error) { next(error); }
+}
 
-    let existingProduct = null;
-
-    if (mongoose.Types.ObjectId.isValid(productId)) {
-      existingProduct = await Product.findById(productId);
-    }
-    
-    if (!existingProduct) {
-      existingProduct = await Product.findOne({ id: productId.toString().trim() });
-    }
-
-    if (!existingProduct) {
-      console.warn(`[Inventory Update Warning] Product ID ${productId} was not found in the database.`);
-      return res.status(404).json({ message: `Product ${productId} not found inside your database collection.` });
-    }
-
-    const finalStock = Math.max(0, Number(stock) || 0);
-    let finalStatus = status;
-
-    if (!finalStatus) {
-      if (finalStock <= 0) {
-        finalStatus = existingProduct.status === "Pre-order" ? "Pre-order" : "Out of Stock";
-      } else if (finalStock <= 5) {
-        finalStatus = "Low Stock";
-      } else {
-        finalStatus = existingProduct.status === "Pre-order" ? "Pre-order" : "Available";
-      }
-    }
-
-    existingProduct.stock = finalStock;
-    existingProduct.status = finalStatus;
-
-    const updatedProduct = await existingProduct.save();
-    
-    console.log(`[Inventory Update Success] Product updated successfully. New Stock: ${updatedProduct.stock}`);
-    res.status(200).json(updatedProduct);
-
-  } catch (error) {
-    console.error("Mongoose execution error during inventory transaction:", error);
-    res.status(500).json({ message: "Server error updating inventory", error: error.message });
-  }
-};
-
-const addProduct = async (req, res) => {
-  res.status(501).json({ message: "Not implemented yet" });
-};
-
-module.exports = {
-  getProducts,
-  updateProductInventory,
-  addProduct
-};
+module.exports = { getProducts, addProduct, updateProduct, catalogScope };

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Manage your Gunpla Hub products, photos, prices, and inventory.">
+  <title>Catalog dashboard | Gunpla Hub</title>
+  <link rel="stylesheet" href="../css/admin-dashboard.css">
+  <script src="../js/admin-dashboard.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">Skip to catalog</a>
+  <aside class="sidebar">
+    <a class="brand" href="index.html" aria-label="Gunpla Hub home"><span class="brand-mark" aria-hidden="true">G<span>H</span></span><span>Gunpla Hub<small>Store workspace</small></span></a>
+    <div class="workspace"><span class="workspace-icon" aria-hidden="true">店</span><div><strong id="workspaceName">Catalog management</strong><small id="workspaceRole">Verifying your account…</small></div></div>
+    <nav aria-label="Workspace">
+      <a href="admin-dashboard.html" class="nav-link active" aria-current="page"><span aria-hidden="true">▦</span> Product catalog</a>
+      <a href="seller-dashboard.html" class="nav-link" id="analyticsLink" hidden><span aria-hidden="true">▥</span> Seller analytics</a>
+      <a href="discover.html" class="nav-link"><span aria-hidden="true">◇</span> Browse storefront</a>
+    </nav>
+    <div class="sidebar-note"><span class="note-line"></span><strong>Ready for the next build.</strong><p>Keep your kits, photos, and stock up to date for your local builders.</p></div>
+    <div class="profile"><span id="avatar" class="avatar">GH</span><div><strong id="adminUsername">Your workspace</strong><small id="accountRole">Catalog access</small></div><button id="logoutBtn" class="logout" type="button" aria-label="Sign out" title="Sign out">↪</button></div>
+  </aside>
+
+  <div class="page-shell">
+    <header class="topbar"><span>Workspace <span class="breadcrumb-divider">/</span> <strong>Product catalog</strong></span><span id="connectionStatus" class="connection" role="status">Connecting…</span></header>
+    <main id="mainContent">
+      <section class="page-heading"><div><h1>Your catalog, build-ready.</h1><p id="dashboardIntro">Manage the kits your community will build next.</p></div><button class="button primary" id="addProductBtn" type="button" disabled><span aria-hidden="true">＋</span> Add product</button></section>
+      <div id="pageError" class="notice error" role="alert" hidden><p id="pageErrorText"></p><button id="retryBtn" type="button" class="button secondary">Try again</button><a id="signInLink" class="button secondary" href="login.html" hidden>Sign in</a></div>
+      <section class="metrics" aria-label="Catalog overview" id="adminStats">
+        <article><span>Products in catalog</span><strong id="totalProducts">—</strong><small id="catalogScope">Your product listings</small></article>
+        <article><span>Units on hand</span><strong id="totalStock">—</strong><small>Across the catalog</small></article>
+        <article><span>Need restocking</span><strong id="lowStock">—</strong><small>5 units or fewer</small></article>
+        <article><span>Inventory value</span><strong id="inventoryValue">—</strong><small>At current selling prices</small></article>
+      </section>
+
+      <section class="catalog-panel" aria-labelledby="catalogTitle">
+        <div class="catalog-heading"><div><h2 id="catalogTitle">Product catalog <span id="productCount" class="count">0</span></h2><p>Every kit. Every detail. All in one place.</p></div><button id="refreshBtn" class="button secondary" type="button">↻ <span>Refresh</span></button></div>
+        <div class="catalog-tools">
+          <label class="search"><span class="sr-only">Search products</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><input id="productSearch" type="search" placeholder="Search product name or SKU…"></label>
+          <label class="filter"><span class="sr-only">Filter by grade</span><select id="gradeFilter"><option value="">All grades</option><option>EG</option><option>HG</option><option>RG</option><option>MG</option><option>PG</option><option>SD</option><option>RE/100</option><option>Other</option></select></label>
+          <label class="filter"><span class="sr-only">Filter by stock status</span><select id="statusFilter"><option value="">All availability</option><option>Available</option><option>Low Stock</option><option>Out of Stock</option><option>Pre-order</option><option>Restock Soon</option></select></label>
+        </div>
+        <div id="catalogLoading" class="empty-state" role="status"><span class="loading-dot"></span><h3>Loading your catalog…</h3><p>Getting the latest product details.</p></div>
+        <div id="emptyState" class="empty-state" hidden><img src="../images/product-placeholder.svg" alt="" width="104" height="104"><h3 id="emptyTitle">Make room for the next build.</h3><p id="emptyText">Add your first kit with a photo, price, and stock quantity.</p><button class="button primary" id="emptyAddBtn" type="button">＋ Add your first product</button><button class="button secondary" id="clearFiltersBtn" type="button" hidden>Clear filters</button></div>
+        <div id="tableWrap" class="table-wrap" hidden>
+          <table><caption class="sr-only">Products and inventory</caption><thead><tr><th scope="col">Product</th><th scope="col">Grade / skill</th><th scope="col">Price</th><th scope="col">Stock</th><th scope="col">Availability</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="productRows"></tbody></table>
+        </div>
+        <footer class="catalog-footer"><span id="resultsSummary" aria-live="polite">Waiting for catalog</span><div class="pagination"><button id="previousPage" class="button icon-button" type="button" aria-label="Previous page" disabled>‹</button><span id="pageNumber">Page 1 of 1</span><button id="nextPage" class="button icon-button" type="button" aria-label="Next page" disabled>›</button></div></footer>
+      </section>
+      <footer class="workspace-footer"><span>Gunpla Hub · Built for local hobby stores</span><span id="lastUpdated">Your changes appear in the storefront after saving.</span></footer>
+    </main>
+  </div>
+
+  <dialog id="productDialog" aria-labelledby="editorTitle" aria-describedby="editorDescription">
+    <form id="productForm">
+      <header class="editor-header"><div><h2 id="editorTitle">Add product</h2><p id="editorDescription">Give builders a closer look at your kit.</p></div><button class="close-button" id="closeEditor" type="button" aria-label="Close product editor">×</button></header>
+      <div class="editor-content">
+        <div id="formError" class="notice error" role="alert" tabindex="-1" hidden></div>
+        <fieldset class="photo-section"><legend>Product photo</legend><div class="photo-controls"><div class="photo-preview"><img id="photoPreview" src="../images/product-placeholder.svg" alt="Product photo preview"></div><div><label for="photoFile" class="button secondary upload-button">Upload photo</label><input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp" class="file-input"><p>JPG, PNG, or WebP. Up to 2 MB.</p><button id="removePhoto" class="text-button" type="button" hidden>Remove photo</button></div></div><details id="photoUrlDetails"><summary>Or use a photo URL</summary><label class="field">Photo URL<input id="photoUrl" type="url" placeholder="https://example.com/kit.jpg" maxlength="2048"></label></details><p id="photoFeedback" class="field-hint" role="status">A clear photo helps builders choose their next kit.</p></fieldset>
+        <div class="form-grid">
+          <label class="field full">Product name <input name="name" id="productName" required maxlength="160" placeholder="e.g. MG Gundam Barbatos"></label>
+          <label class="field full">SKU <span class="optional">Optional for new products</span><input name="id" id="productSku" maxlength="64" pattern="[A-Za-z0-9_\-]+" placeholder="e.g. GH-107"><small>Leave blank to generate one. Use letters, numbers, - or _.</small></label>
+          <label class="field">Kit grade<select name="grade" id="productGrade" required><option value="">Select grade</option><option>EG</option><option>HG</option><option>RG</option><option>MG</option><option>PG</option><option>SD</option><option>RE/100</option><option>Other</option></select></label>
+          <label class="field">Builder skill<select name="skill" id="productSkill" required><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></label>
+          <label class="field">Price (PHP)<input name="price" id="productPrice" type="number" min="0" max="10000000" step="0.01" required placeholder="0.00"></label>
+          <label class="field">Stock quantity<input name="stock" id="productStock" type="number" min="0" max="1000000" step="1" required value="0"></label>
+          <label class="field full">Availability<select name="status" id="productStatus"><option value="">Automatic from stock</option><option>Pre-order</option><option>Restock Soon</option></select><small>Automatic: out of stock at 0, low stock at 1–5, available at 6+.</small></label>
+          <label class="field full" id="storeField">Store owner<select name="storeId" id="productStore" required></select><small id="storeHint">Choose the store that owns this product.</small></label>
+          <label class="field full">Description <span class="optional">Optional</span><textarea name="description" id="productDescription" rows="4" maxlength="3000" placeholder="Tell builders about the kit, included parts, and what makes it special."></textarea></label>
+        </div>
+      </div>
+      <footer class="editor-footer"><span id="saveHint">Saved products appear in the storefront.</span><div><button id="cancelEditor" class="button secondary" type="button">Cancel</button><button id="saveProduct" class="button primary" type="submit">Add product</button></div></footer>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript><p class="notice error">Enable JavaScript to manage your product catalog.</p></noscript>
+</body>
+</html>
