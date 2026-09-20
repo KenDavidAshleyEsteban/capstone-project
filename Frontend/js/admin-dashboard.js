@@ -4,7 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const ACCOUNT_KEY = 'gunpla.account.v1';
   const PLACEHOLDER = 'images/product-placeholder.svg';
-  const API = window.GUNPLA_API_URL || (location.protocol === 'file:' || ['5500', '5501'].includes(location.port) ? 'http://localhost:5000/api' : '/api');
+  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["5500", "5501"].includes(location.port) ? "http://localhost:5000/api" : "https://capstone-project-35cd.onrender.com/api");
   const money = (value) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value);
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   let account;
