@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Manage your Gunpla Hub products, photos, prices, and inventory.">
   <title>Catalog dashboard | Gunpla Hub</title>
-  <link rel="stylesheet" href="../css/admin-dashboard.css">
-  <script src="../js/admin-dashboard.js" defer></script>
+  <link rel="stylesheet" href="css/admin-dashboard.css">
+  <script src="js/admin-dashboard.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to catalog</a>
@@ -42,7 +42,7 @@
           <label class="filter"><span class="sr-only">Filter by stock status</span><select id="statusFilter"><option value="">All availability</option><option>Available</option><option>Low Stock</option><option>Out of Stock</option><option>Pre-order</option><option>Restock Soon</option></select></label>
         </div>
         <div id="catalogLoading" class="empty-state" role="status"><span class="loading-dot"></span><h3>Loading your catalog…</h3><p>Getting the latest product details.</p></div>
-        <div id="emptyState" class="empty-state" hidden><img src="../images/product-placeholder.svg" alt="" width="104" height="104"><h3 id="emptyTitle">Make room for the next build.</h3><p id="emptyText">Add your first kit with a photo, price, and stock quantity.</p><button class="button primary" id="emptyAddBtn" type="button">＋ Add your first product</button><button class="button secondary" id="clearFiltersBtn" type="button" hidden>Clear filters</button></div>
+        <div id="emptyState" class="empty-state" hidden><img src="images/product-placeholder.svg" alt="" width="104" height="104"><h3 id="emptyTitle">Make room for the next build.</h3><p id="emptyText">Add your first kit with a photo, price, and stock quantity.</p><button class="button primary" id="emptyAddBtn" type="button">＋ Add your first product</button><button class="button secondary" id="clearFiltersBtn" type="button" hidden>Clear filters</button></div>
         <div id="tableWrap" class="table-wrap" hidden>
           <table><caption class="sr-only">Products and inventory</caption><thead><tr><th scope="col">Product</th><th scope="col">Grade / skill</th><th scope="col">Price</th><th scope="col">Stock</th><th scope="col">Availability</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead><tbody id="productRows"></tbody></table>
         </div>
@@ -57,7 +57,7 @@
       <header class="editor-header"><div><h2 id="editorTitle">Add product</h2><p id="editorDescription">Give builders a closer look at your kit.</p></div><button class="close-button" id="closeEditor" type="button" aria-label="Close product editor">×</button></header>
       <div class="editor-content">
         <div id="formError" class="notice error" role="alert" tabindex="-1" hidden></div>
-        <fieldset class="photo-section"><legend>Product photo</legend><div class="photo-controls"><div class="photo-preview"><img id="photoPreview" src="../images/product-placeholder.svg" alt="Product photo preview"></div><div><label for="photoFile" class="button secondary upload-button">Upload photo</label><input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp" class="file-input"><p>JPG, PNG, or WebP. Up to 2 MB.</p><button id="removePhoto" class="text-button" type="button" hidden>Remove photo</button></div></div><details id="photoUrlDetails"><summary>Or use a photo URL</summary><label class="field">Photo URL<input id="photoUrl" type="url" placeholder="https://example.com/kit.jpg" maxlength="2048"></label></details><p id="photoFeedback" class="field-hint" role="status">A clear photo helps builders choose their next kit.</p></fieldset>
+        <fieldset class="photo-section"><legend>Product photo</legend><div class="photo-controls"><div class="photo-preview"><img id="photoPreview" src="images/product-placeholder.svg" alt="Product photo preview"></div><div><label for="photoFile" class="button secondary upload-button">Upload photo</label><input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp" class="file-input"><p>JPG, PNG, or WebP. Up to 2 MB.</p><button id="removePhoto" class="text-button" type="button" hidden>Remove photo</button></div></div><details id="photoUrlDetails"><summary>Or use a photo URL</summary><label class="field">Photo URL<input id="photoUrl" type="url" placeholder="https://example.com/kit.jpg" maxlength="2048"></label></details><p id="photoFeedback" class="field-hint" role="status">A clear photo helps builders choose their next kit.</p></fieldset>
         <div class="form-grid">
           <label class="field full">Product name <input name="name" id="productName" required maxlength="160" placeholder="e.g. MG Gundam Barbatos"></label>
           <label class="field full">SKU <span class="optional">Optional for new products</span><input name="id" id="productSku" maxlength="64" pattern="[A-Za-z0-9_\-]+" placeholder="e.g. GH-107"><small>Leave blank to generate one. Use letters, numbers, - or _.</small></label>

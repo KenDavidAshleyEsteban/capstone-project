@@ -80,7 +80,7 @@ img {
   position: fixed;
   inset: 0;
   z-index: -2;
-  background: url("../images/background.gif") center / cover no-repeat fixed;
+  background: url("images/background.gif") center / cover no-repeat fixed;
 }
 
 .ambient-bg::before {

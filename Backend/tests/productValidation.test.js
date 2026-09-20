@@ -7,7 +7,7 @@ const kit = { name: 'HG Aerial', grade: 'HG', skill: 'Beginner', price: 980.50, 
 test('new products receive a SKU, placeholder photo, and stock-derived availability', () => {
   const product = validateProduct(kit);
   assert.match(product.id, /^GH-/);
-  assert.equal(product.image, '../images/product-placeholder.svg');
+  assert.equal(product.image, 'images/product-placeholder.svg');
   assert.equal(product.status, 'Available');
 });
 
@@ -38,7 +38,7 @@ test('photo validation accepts raster files and refuses executable or oversized 
   assert.equal(validateImage(png), png);
   assert.equal(validateImage('https://example.com/kit.jpg'), 'https://example.com/kit.jpg');
   for (const value of ['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,aGVsbG8=',
-    'https://user:password@example.com/photo.jpg', 'file:///tmp/photo.png', '../images/../../file.png',
+    'https://user:password@example.com/photo.jpg', 'file:///tmp/photo.png', 'images/../../file.png',
     `data:image/png;base64,${'A'.repeat(3 * 1024 * 1024)}`]) {
     assert.throws(() => validateImage(value), { status: 400 });
   }

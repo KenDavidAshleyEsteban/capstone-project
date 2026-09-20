@@ -52,10 +52,10 @@ test('catalog API persists products and photos and enforces store ownership', { 
   assert.equal((await api(`/products/${created.data._id}`, other, 'PUT', { stock: 0 })).status, 404);
   assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { stock: -1 })).status, 400);
   assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { storeId: String(other._id) })).status, 400);
-  const edited = await api(`/products/${created.data._id}`, seller, 'PUT', { name: 'Updated kit', price: 1234.56, stock: 3, image: '../images/product-placeholder.svg' });
+  const edited = await api(`/products/${created.data._id}`, seller, 'PUT', { name: 'Updated kit', price: 1234.56, stock: 3, image: 'images/product-placeholder.svg' });
   assert.equal(edited.status, 200);
   assert.equal(edited.data.status, 'Low Stock');
-  assert.equal(edited.data.image, '../images/product-placeholder.svg');
+  assert.equal(edited.data.image, 'images/product-placeholder.svg');
   assert.equal((await Product.findById(created.data._id)).price, 1234.56);
   assert.equal((await api('/products')).data[0].name, 'Updated kit');
   const overview = (await api('/admin/dashboard', admin)).data;

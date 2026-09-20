@@ -1135,7 +1135,7 @@
 
     const balance = pointsBalance();
     const tx = getTransactions();
-    shell(`${titleBlock("Points wallet", "Track earned loyalty points", "Points are earned from receipt QR claims and spent on local store rewards.")}<section class="wallet"><div><p class="kicker">Current balance</p><h2>${balance.toLocaleString()} pts</h2><div class="track"><span style="width:${Math.min(100, balance / 10)}%"></span></div><p>${balance >= 1000 ? "Gold Builder" : balance >= 500 ? "Silver Builder" : "Starter Builder"}</p></div><img src="../images/model.jpg" alt="Gunpla builder mascot"></section><section class="history-list">${tx.map((item) => `<article><b>+${item.points} pts</b><span>${item.store}</span><small>${item.receiptId} · ${new Date(item.date).toLocaleDateString()}</small></article>`).join("") || `<div class="empty">No point activity yet.</div>`}</section>`);
+    shell(`${titleBlock("Points wallet", "Track earned loyalty points", "Points are earned from receipt QR claims and spent on local store rewards.")}<section class="wallet"><div><p class="kicker">Current balance</p><h2>${balance.toLocaleString()} pts</h2><div class="track"><span style="width:${Math.min(100, balance / 10)}%"></span></div><p>${balance >= 1000 ? "Gold Builder" : balance >= 500 ? "Silver Builder" : "Starter Builder"}</p></div><img src="images/model.jpg" alt="Gunpla builder mascot"></section><section class="history-list">${tx.map((item) => `<article><b>+${item.points} pts</b><span>${item.store}</span><small>${item.receiptId} · ${new Date(item.date).toLocaleDateString()}</small></article>`).join("") || `<div class="empty">No point activity yet.</div>`}</section>`);
   }
 
   function renderRewards() {
@@ -1915,7 +1915,7 @@
       const url = new URL(value);
       if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password) return url.href;
     } catch { /* Use a placeholder for unsupported photos. */ }
-    return "../images/product-placeholder.svg";
+    return "images/product-placeholder.svg";
   }
 
   async function startPage() {
@@ -1939,7 +1939,7 @@
 
   document.addEventListener("error", (event) => {
     if (event.target.matches?.(".product-art img") && !event.target.src.endsWith("/product-placeholder.svg")) {
-      event.target.src = "../images/product-placeholder.svg";
+      event.target.src = "images/product-placeholder.svg";
     }
   }, true);
   startPage();
