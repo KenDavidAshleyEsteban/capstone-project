@@ -38,7 +38,7 @@
     seller: "Seller"
   };
   const accountRoles = ["buyer", "seller", "admin"];
-  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["5500", "5501"].includes(location.port) ? "http://localhost:5000/api" : "/api");
+  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["5500", "5501"].includes(location.port) ? "http://localhost:5000/api" : "https://capstone-project-35cd.onrender.com/api");
   let navOutsideCloseBound = false;
 
   function normalizeAccountRole(role) {
