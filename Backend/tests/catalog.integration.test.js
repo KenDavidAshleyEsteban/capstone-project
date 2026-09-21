@@ -52,10 +52,10 @@ test('catalog API persists products and photos and enforces store ownership', { 
   assert.equal((await api(`/products/${created.data._id}`, other, 'PUT', { stock: 0 })).status, 404);
   assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { stock: -1 })).status, 400);
   assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { storeId: String(other._id) })).status, 400);
-  const edited = await api(`/products/${created.data._id}`, seller, 'PUT', { name: 'Updated kit', price: 1234.56, stock: 3, image: '../images/product-placeholder.svg' });
+  const edited = await api(`/products/${created.data._id}`, seller, 'PUT', { name: 'Updated kit', price: 1234.56, stock: 3, image: 'images/product-placeholder.svg' });
   assert.equal(edited.status, 200);
   assert.equal(edited.data.status, 'Low Stock');
-  assert.equal(edited.data.image, '../images/product-placeholder.svg');
+  assert.equal(edited.data.image, 'images/product-placeholder.svg');
   assert.equal((await Product.findById(created.data._id)).price, 1234.56);
   assert.equal((await api('/products')).data[0].name, 'Updated kit');
   const overview = (await api('/admin/dashboard', admin)).data;
@@ -72,7 +72,7 @@ test('catalog API persists products and photos and enforces store ownership', { 
   const registered = await api('/auth/register', null, 'POST', { username: 'New Owner', email: 'new@test.invalid', password: 'Catalog-test-password!', role: 'seller', storeName: 'New Shop', storeLocation: 'Baguio' });
   assert.equal(registered.status, 201);
   assert.equal((await api('/products', seller, 'POST', { ...kit, id: 'TEST-HG-2', image: `data:image/png;base64,${'A'.repeat(4 * 1024 * 1024)}` })).status, 413);
-  const page = await fetch(`${base}/html/admin-dashboard.html`);
+  const page = await fetch(`${base}/admin-dashboard.html`);
   assert.equal(page.status, 200);
   assert.match(await page.text(), /Your catalog, build-ready/);
 });

@@ -10,7 +10,6 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api', (req, res) => res.status(404).json({ message: 'API route not found.' }));
 app.use(express.static(path.join(__dirname, '../Frontend')));
-app.get('/', (req, res) => res.redirect('/html/index.html'));
 
 app.use((error, req, res, next) => {
   if (error.code === 11000) return res.status(409).json({ message: 'This SKU already exists. Choose a different SKU.', field: 'id' });

@@ -1,6 +1,6 @@
 # Gunpla Hub
 
-Store owners and admins can manage products at `/html/admin-dashboard.html`. The catalog supports adding and editing kits, price and stock changes, photo uploads or URLs, search, filters, and pagination. Products and uploaded photos are saved in MongoDB and loaded by the public home and discovery pages.
+Store owners and admins can manage products at `/admin-dashboard.html`. The catalog supports adding and editing kits, price and stock changes, photo uploads or URLs, search, filters, and pagination. Products and uploaded photos are saved in MongoDB and loaded by the public home and discovery pages.
 
 ## Run locally
 
@@ -8,7 +8,7 @@ Store owners and admins can manage products at `/html/admin-dashboard.html`. The
 2. In `Backend`, run `npm ci`.
 3. Copy `Backend/.env.example` to `Backend/.env`. Set `MONGODB_URI` and a long random `JWT_SECRET`.
 4. Run `npm start` from `Backend`.
-5. Open `http://localhost:5000/html/login.html`. Register a seller account with a store name and location, or sign in with an existing admin. Both roles can open the product dashboard after login.
+5. Open `http://localhost:5000/login.html`. Register a seller account with a store name and location, or sign in with an existing admin. Both roles can open the product dashboard after login.
 
 To create the first admin, set `ADMIN_EMAIL`, `ADMIN_USERNAME`, and a strong `ADMIN_PASSWORD` in `.env`, then run `npm run seed:admin`. This does not replace an existing admin or reset its password. Remove the seeding password from `.env` afterward. The old seed script included a database credential in source control; rotate that credential if it is still active.
 

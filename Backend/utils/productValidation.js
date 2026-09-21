@@ -3,7 +3,7 @@ const { randomUUID } = require('node:crypto');
 const GRADES = ['EG', 'HG', 'RG', 'MG', 'PG', 'SD', 'RE/100', 'Other'];
 const SKILLS = ['Beginner', 'Intermediate', 'Advanced'];
 const STATUSES = ['Available', 'Low Stock', 'Out of Stock', 'Pre-order', 'Restock Soon'];
-const PLACEHOLDER = '../images/product-placeholder.svg';
+const PLACEHOLDER = 'images/product-placeholder.svg';
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 class InputError extends Error {

@@ -25,7 +25,7 @@ async function createAdmin() {
     password: await bcrypt.hash(ADMIN_PASSWORD, 12),
     role: 'admin'
   });
-  console.log('Admin account created. Sign in from /html/login.html.');
+  console.log('Admin account created. Sign in from /login.html.');
 }
 
 createAdmin().catch(() => {
