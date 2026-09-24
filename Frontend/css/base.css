@@ -190,8 +190,6 @@ iframe {
   white-space: nowrap;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  -webkit-animation: scale-up-hor-left 0.4s cubic-bezier(0.39, 0.575, 0.565, 1) both;
-  animation: scale-up-hor-left 0.4s cubic-bezier(0.39, 0.575, 0.565, 1) both;
 }
 
 .brand b {
@@ -212,43 +210,6 @@ iframe {
   letter-spacing: 0.35em;
   line-height: 1;
   text-transform: uppercase;
-}
-
-@-webkit-keyframes scale-up-hor-left {
-  0% {
-    -webkit-transform: scaleX(0.4);
-    transform: scaleX(0.4);
-    -webkit-transform-origin: 0% 0%;
-    transform-origin: 0% 0%;
-  }
-  100% {
-    -webkit-transform: scaleX(1);
-    transform: scaleX(1);
-    -webkit-transform-origin: 0% 0%;
-    transform-origin: 0% 0%;
-  }
-}
-
-@keyframes scale-up-hor-left {
-  0% {
-    -webkit-transform: scaleX(0.4);
-    transform: scaleX(0.4);
-    -webkit-transform-origin: 0% 0%;
-    transform-origin: 0% 0%;
-  }
-  100% {
-    -webkit-transform: scaleX(1);
-    transform: scaleX(1);
-    -webkit-transform-origin: 0% 0%;
-    transform-origin: 0% 0%;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brand {
-    -webkit-animation: none;
-    animation: none;
-  }
 }
 
 .nav-links {
