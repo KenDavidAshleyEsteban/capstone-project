@@ -37,7 +37,7 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   background: var(--bg);
   color: var(--text);
-  overflow-x: hidden;
+  overflow-wrap: anywhere;
 }
 
 a {
@@ -60,6 +60,34 @@ button {
 img {
   display: block;
   max-width: 100%;
+}
+
+/* Allow grid/flex children and native form controls to fit their containers. */
+main :where(*) {
+  min-width: 0;
+}
+
+input,
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  width: 100%;
+}
+
+video,
+iframe {
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 3px;
 }
 
 .skip-link {
@@ -518,8 +546,8 @@ img {
 }
 
 .hero-visual .hero-mecha-img {
-  width: min(125%, 820px);
-  max-width: none;
+  width: min(100%, 820px);
+  max-width: 100%;
   height: auto;
   object-fit: contain;
   background: transparent;
@@ -682,7 +710,7 @@ p {
 .guide-hero > div::before {
   content: "";
   position: absolute;
-  inset: -30px -96px -30px -28px;
+  inset: -30px 0;
   z-index: -1;
   background:
     radial-gradient(circle at 18% 48%, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0) 58%),
@@ -1482,156 +1510,6 @@ label {
   align-self: flex-end;
 }
 
-@media (max-width: 980px) {
-  .nav-wrap {
-    grid-template-columns: auto auto auto;
-  }
-
-  .menu-btn {
-    display: block;
-  }
-
-  .nav-links {
-    position: fixed;
-    top: 86px;
-    left: 16px;
-    right: 16px;
-    display: none;
-    flex-direction: column;
-    align-items: stretch;
-    padding: 14px;
-    border: 1px solid var(--line);
-    border-radius: 24px;
-    background: var(--surface-strong);
-    box-shadow: var(--shadow);
-  }
-
-  .nav-links.open {
-    display: flex;
-  }
-
-  .nav-links a,
-  .nav-menu,
-  .nav-menu-trigger {
-    width: 100%;
-  }
-
-  .nav-links a,
-  .nav-menu-trigger {
-    justify-content: center;
-  }
-
-  .nav-dropdown {
-    position: static;
-    min-width: 0;
-    margin-top: 6px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
-    box-shadow: none;
-  }
-
-  .hero,
-  .guide-hero,
-  .guide-pick,
-  .guide-video-panel,
-  .scan-panel,
-  .wallet,
-  .auth-card,
-  .analytics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .product-grid,
-  .feature-grid,
-  .guide-grade-grid,
-  .guide-step-list,
-  .guide-columns,
-  .store-grid,
-  .reward-grid,
-  .metric-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .guide-pick {
-    grid-template-columns: 1fr;
-  }
-
-  .guide-path {
-    justify-content: flex-start;
-  }
-
-  .hero-visual {
-    min-height: 380px;
-  }
-}
-
-@media (max-width: 640px) {
-  .container {
-    padding: 30px var(--page-gutter) 64px;
-  }
-
-  .hero h1,
-  .page-head h1,
-  .guide-hero h1,
-  .auth-card h1 {
-    letter-spacing: -2px;
-  }
-
-  .product-grid,
-  .feature-grid,
-  .guide-grade-grid,
-  .guide-step-list,
-  .guide-columns,
-  .guide-video-form,
-  .guide-video-card,
-  .store-grid,
-  .reward-grid,
-  .metric-grid,
-  .toolbar,
-  .event-card,
-  .receipt-card,
-  .qr-modal {
-    grid-template-columns: 1fr;
-  }
-
-  .section-head {
-    flex-direction: column;
-    align-items: start;
-  }
-
-  .button-stack {
-    justify-content: start;
-  }
-
-  .guide-grade-card {
-    grid-template-columns: 1fr;
-  }
-
-  .guide-grade-code {
-    width: 96px;
-  }
-
-  .guide-path i {
-    width: 18px;
-  }
-
-  .auth-actions,
-  .access-actions,
-  .modal-actions {
-    align-items: stretch;
-  }
-
-  .auth-actions > *,
-  .access-actions > *,
-  .modal-actions > * {
-    flex: 1 1 100%;
-  }
-
-  .bar-row {
-    grid-template-columns: 1fr;
-  }
-}
-
 /* Seller analytics page */
 .seller-command {
   display: grid;
@@ -1902,25 +1780,4 @@ label {
 .seller-list b {
   display: block;
   margin-top: 8px;
-}
-
-@media (max-width: 980px) {
-  .seller-command,
-  .seller-grid,
-  .seller-metric-grid,
-  .seller-feature-grid,
-  .seller-offer-form,
-  .seller-offer-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .seller-actions {
-    justify-content: flex-start;
-  }
-}
-
-@media (max-width: 640px) {
-  .seller-bar-row {
-    grid-template-columns: 1fr;
-  }
 }

@@ -1,0 +1,289 @@
+/* Load after page styles so desktop rules cannot override these breakpoints. */
+.card-row {
+  flex-wrap: wrap;
+}
+
+.modal {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.modal-card {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: 64px;
+}
+
+.fake-qr,
+.fake-qr.large {
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+/* The offer editor needs more room than the other dashboard sections. */
+@media (max-width: 1200px) {
+  .seller-offer-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .seller-offer-form .wide {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 980px) {
+  .nav-wrap {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    position: relative;
+  }
+
+  .menu-btn {
+    display: block;
+  }
+
+  .nav-links {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 16px;
+    right: 16px;
+    display: none;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    background: var(--surface-strong);
+    box-shadow: var(--shadow);
+    max-height: calc(100vh - 110px);
+    max-height: calc(100dvh - 110px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .nav-links.open {
+    display: flex;
+  }
+
+  .nav-links a,
+  .nav-menu,
+  .nav-menu-trigger {
+    width: 100%;
+  }
+
+  .nav-links a,
+  .nav-menu-trigger {
+    justify-content: center;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+
+  .nav-menu {
+    flex-shrink: 0;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .nav-dropdown {
+    position: static;
+    min-width: 0;
+    margin-top: 6px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    box-shadow: none;
+  }
+
+  .hero,
+  .guide-hero,
+  .guide-pick,
+  .guide-video-panel,
+  .scan-panel,
+  .wallet,
+  .auth-card,
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .product-grid,
+  .feature-grid,
+  .guide-grade-grid,
+  .guide-step-list,
+  .guide-columns,
+  .store-grid,
+  .reward-grid,
+  .metric-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .guide-pick {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-path {
+    justify-content: flex-start;
+  }
+
+  .hero-visual {
+    min-height: 380px;
+  }
+
+  .guide-grade-card {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-grade-code {
+    width: 96px;
+  }
+}
+
+@media (max-width: 640px) {
+  .container {
+    padding: 30px var(--page-gutter) 64px;
+  }
+
+  .brand {
+    padding-inline: 0;
+    white-space: normal;
+  }
+
+  .brand b {
+    font-size: 0.9rem;
+  }
+
+  .brand small {
+    font-size: 0.48rem;
+    letter-spacing: 0.16em;
+    line-height: 1.4;
+  }
+
+  .login-chip {
+    max-width: 100px;
+    padding: 10px;
+    text-align: center;
+  }
+
+  .hero,
+  .guide-hero {
+    padding-top: 24px;
+  }
+
+  .auth-card {
+    padding: 18px;
+    margin: 16px auto;
+  }
+
+  .auth-forms,
+  .seller-register-fields {
+    padding: 12px;
+  }
+
+  .modal-card {
+    padding: 64px 18px 22px;
+  }
+
+  .hero-actions > *,
+  .button-stack > * {
+    flex: 1 1 auto;
+  }
+
+  .primary-btn,
+  .ghost-btn {
+    padding-block: 12px;
+    text-align: center;
+  }
+
+  .hero h1,
+  .page-head h1,
+  .guide-hero h1,
+  .auth-card h1 {
+    letter-spacing: -2px;
+  }
+
+  .product-grid,
+  .feature-grid,
+  .guide-grade-grid,
+  .guide-step-list,
+  .guide-columns,
+  .guide-video-form,
+  .guide-video-card,
+  .store-grid,
+  .reward-grid,
+  .metric-grid,
+  .toolbar,
+  .event-card,
+  .receipt-card,
+  .qr-modal {
+    grid-template-columns: 1fr;
+  }
+
+  .section-head {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .button-stack {
+    justify-content: start;
+  }
+
+  .guide-grade-card {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-grade-code {
+    width: 96px;
+  }
+
+  .guide-path i {
+    width: 18px;
+  }
+
+  .auth-actions,
+  .access-actions,
+  .modal-actions {
+    align-items: stretch;
+  }
+
+  .auth-actions > *,
+  .access-actions > *,
+  .modal-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .bar-row {
+    grid-template-columns: 1fr;
+  }
+
+  .background-motion-toggle {
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
+
+@media (max-width: 980px) {
+  .seller-command,
+  .seller-grid,
+  .seller-metric-grid,
+  .seller-feature-grid,
+  .seller-offer-form,
+  .seller-offer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .seller-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .seller-bar-row {
+    grid-template-columns: 1fr;
+  }
+}

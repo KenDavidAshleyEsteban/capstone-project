@@ -17,7 +17,7 @@
 .guide-hero > div::before {
   content: "";
   position: absolute;
-  inset: -30px -96px -30px -28px;
+  inset: -30px 0;
   z-index: -1;
   background:
     radial-gradient(circle at 18% 48%, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0) 58%),
