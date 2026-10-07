@@ -1,33 +1,18 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async (options) => {
   try {
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      },
-      tls: {
-        rejectUnauthorized: false
-      },
-      family: 4
-    });
-
-    const mailOptions = {
-      from: `"Gunpla Hub" <${process.env.EMAIL_USER}>`,
+    const data = await resend.emails.send({
+      from: "Gunpla Hub <onboarding@resend.dev>",
       to: options.email,
       subject: options.subject,
       html: options.html
-    };
-
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully: ", info.response);
-    return info;
+    });
+    console.log("Email sent successfully via Resend:", data);
+    return data;
   } catch (error) {
-    console.error("Nodemailer send failed:", error);
+    console.error("Resend send failed:", error);
     throw error;
   }
 };
