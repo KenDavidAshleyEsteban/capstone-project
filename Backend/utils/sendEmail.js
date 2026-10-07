@@ -12,7 +12,8 @@ const sendEmail = async (options) => {
       },
       tls: {
         rejectUnauthorized: false
-      }
+      },
+      family: 4
     });
 
     const mailOptions = {
