@@ -81,7 +81,7 @@ exports.register = async(req,res)=>{
    });
 
    // Build verification URL pointing to your Render backend
-   const verificationUrl = `${process.env.BACKEND_URL || 'https://your-backend.onrender.com'}/api/auth/verify?token=${verificationToken}`;
+   const verificationUrl = `${process.env.BACKEND_URL || 'https://capstone-project-35cd.onrender.com'}/api/auth/verify?token=${verificationToken}`;
 
    await sendEmail({
      email: user.email,
@@ -123,11 +123,10 @@ exports.verifyEmail = async (req, res) => {
     user.verificationExpires = undefined;
     await user.save();
 
-    // Optional: If you want to redirect them directly to your frontend login page:
-    // return res.redirect("https://your-frontend.vercel.app/login.html?verified=true");
-
-    res.status(200).json({ message: "Email verified successfully! You can now log in." });
+    // Redirect the user's browser to the live frontend login page
+    return res.redirect("https://gunpla-hub-mu.vercel.app/login.html?verified=true");
   } catch (error) {
+    console.error("VERIFICATION ERROR:", error);
     res.status(500).json({ message: "Verification failed", error: error.message });
   }
 };
