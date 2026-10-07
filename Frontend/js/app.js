@@ -263,8 +263,8 @@
       <header class="topbar">
         <div class="nav-wrap">
           <a class="brand" href="index.html"><b><span>GUNPLA</span> HUB</b><small>Baguio builders network</small></a>
-          <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
-          <nav class="nav-links" id="navLinks">
+          <button class="menu-btn" id="menuBtn" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="navLinks">☰</button>
+          <nav class="nav-links" id="navLinks" aria-label="Main navigation">
             ${visibleNavItems()}
           </nav>
           ${accountChip()}
@@ -274,7 +274,9 @@
       <div class="modal" id="modal" aria-hidden="true"><div class="modal-card"><button class="modal-close" id="modalClose">×</button><div id="modalBody"></div></div></div>
     `;
 
-    byId("menuBtn")?.addEventListener("click", () => byId("navLinks").classList.toggle("open"));
+    byId("menuBtn")?.addEventListener("click", () => {
+      setMobileMenu(!byId("navLinks").classList.contains("open"));
+    });
     document.querySelectorAll("[data-nav-menu]").forEach((menu) => {
       const trigger = menu.querySelector(".nav-menu-trigger");
 
@@ -288,10 +290,20 @@
     });
 
     if (!navOutsideCloseBound) {
-      document.addEventListener("click", () => closeNavMenus());
-      document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") closeNavMenus();
+      document.addEventListener("click", (event) => {
+        closeNavMenus();
+        if (!event.target.closest(".nav-wrap")) setMobileMenu(false);
       });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          closeNavMenus();
+          if (byId("navLinks")?.classList.contains("open")) {
+            setMobileMenu(false);
+            byId("menuBtn")?.focus();
+          }
+        }
+      });
+      window.matchMedia("(max-width: 980px)").addEventListener("change", () => setMobileMenu(false));
       navOutsideCloseBound = true;
     }
 
@@ -300,6 +312,13 @@
     byId("modal")?.addEventListener("click", (event) => {
       if (event.target.id === "modal") closeModal();
     });
+  }
+
+  function setMobileMenu(open) {
+    byId("navLinks")?.classList.toggle("open", open);
+    byId("menuBtn")?.setAttribute("aria-expanded", String(open));
+    byId("menuBtn")?.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+    if (!open) closeNavMenus();
   }
 
   function openModal(html) {
