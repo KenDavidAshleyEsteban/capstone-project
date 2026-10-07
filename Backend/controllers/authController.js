@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const sendEmail = require("../utils/sendEmail");
 
 const ALLOWED_ROLES = ["buyer", "seller", "admin"];
 
@@ -62,21 +64,72 @@ exports.register = async(req,res)=>{
 
    const hashed = await bcrypt.hash(password,10);
 
+   // Generate verification token and 24-hour expiration
+   const verificationToken = crypto.randomBytes(32).toString("hex");
+   const verificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+
    const user = await User.create({
      username,
      email: normalizedEmail,
-     password:hashed,
+     password: hashed,
      role: accountRole,
      storeName: accountRole === "seller" ? normalizedStoreName : "",
-     storeLocation: accountRole === "seller" ? normalizedStoreLocation : ""
+     storeLocation: accountRole === "seller" ? normalizedStoreLocation : "",
+     isVerified: false,
+     verificationToken,
+     verificationExpires
    });
 
-   const token = createToken(user);
+   // Build verification URL pointing to your Render backend
+   const verificationUrl = `${process.env.BACKEND_URL || 'https://your-backend.onrender.com'}/api/auth/verify?token=${verificationToken}`;
 
-   res.status(201).json({token,user:publicUser(user)});
+   await sendEmail({
+     email: user.email,
+     subject: "Verify Your Email Address",
+     html: `
+       <h2>Welcome to our platform, ${username}!</h2>
+       <p>Please click the link below to verify your email address. This link will expire in 24 hours.</p>
+       <a href="${verificationUrl}" target="_blank" style="padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Verify Email</a>
+     `
+   });
+
+   res.status(201).json({
+     message: "Registration successful! Please check your email to verify your account before logging in."
+   });
  } catch (error) {
+   console.error("REGISTRATION ERROR:", error);
    res.status(500).json({message:"Registration failed", error:error.message});
  }
+};
+
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) {
+      return res.status(400).json({ message: "Invalid verification token" });
+    }
+
+    const user = await User.findOne({
+      verificationToken: token,
+      verificationExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: "Verification token is invalid or has expired." });
+    }
+
+    user.isVerified = true;
+    user.verificationToken = undefined;
+    user.verificationExpires = undefined;
+    await user.save();
+
+    // Optional: If you want to redirect them directly to your frontend login page:
+    // return res.redirect("https://your-frontend.vercel.app/login.html?verified=true");
+
+    res.status(200).json({ message: "Email verified successfully! You can now log in." });
+  } catch (error) {
+    res.status(500).json({ message: "Verification failed", error: error.message });
+  }
 };
 
 exports.login = async(req,res)=>{
@@ -89,6 +142,11 @@ exports.login = async(req,res)=>{
 
    const user = await User.findOne({email:String(email).trim().toLowerCase()}).select("+password");
    if(!user) return res.status(400).json({message:"Invalid email or password"});
+
+   // Block unverified users from logging in
+   if(!user.isVerified) {
+     return res.status(403).json({message:"Please verify your email address before logging in."});
+   }
 
    const match = await bcrypt.compare(password, user.password);
    if(!match) return res.status(400).json({message:"Invalid email or password"});
