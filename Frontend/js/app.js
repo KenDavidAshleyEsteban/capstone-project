@@ -1907,7 +1907,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
         }
 
         const account = saveAuthenticatedAccount(data, payload);
-        openModal(`<h2>${roleLabels[account.role]} account created</h2><p>Your account is ready and signed in.</p><a class="primary-btn" href="${roleHome(account.role)}">Continue</a>`);
+        openModal(`<h2>Registration Successful!</h2><p>${data.message || "Please check your email to verify your account before logging in."}</p><a class="primary-btn" href="login.html">Go to Login</a>`);
       } catch (error) {
         console.error("Auth server error:", error);
         alert("Failed to connect to the backend authentication server. Is your node server running on port 5000?");
