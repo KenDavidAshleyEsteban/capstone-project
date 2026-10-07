@@ -123,8 +123,7 @@ exports.verifyEmail = async (req, res) => {
     user.verificationExpires = undefined;
     await user.save();
 
-    // Redirect the user's browser to the live frontend login page
-    return res.redirect("https://gunpla-hub-mu.vercel.app/login.html?verified=true");
+    res.redirect('https://gunpla-hub-mu.vercel.app/login.html?verified=true');
   } catch (error) {
     console.error("VERIFICATION ERROR:", error);
     res.status(500).json({ message: "Verification failed", error: error.message });
