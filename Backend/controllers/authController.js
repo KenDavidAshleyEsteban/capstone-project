@@ -30,7 +30,7 @@ function createToken(user) {
  );
 }
 
-exports.register = async(req,res)=>{
+exports.register = async(res,res)=>{
  try {
    const {username,email,password,role,storeName,storeLocation,adminSecret} = req.body;
    const accountRole = sanitizeRole(role);
@@ -64,9 +64,8 @@ exports.register = async(req,res)=>{
 
    const hashed = await bcrypt.hash(password,10);
 
-   // Generate verification token and 24-hour expiration
    const verificationToken = crypto.randomBytes(32).toString("hex");
-   const verificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+   const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
    const user = await User.create({
      username,
@@ -80,7 +79,6 @@ exports.register = async(req,res)=>{
      verificationExpires
    });
 
-   // Build verification URL pointing to your Render backend
    const verificationUrl = `${process.env.BACKEND_URL || 'https://capstone-project-35cd.onrender.com'}/api/auth/verify?token=${verificationToken}`;
 
    await sendEmail({
@@ -111,7 +109,7 @@ exports.verifyEmail = async (req, res) => {
 
     const user = await User.findOne({
       verificationToken: token,
-      verificationExpires: { $gt: Date.now() }
+      verificationExpires: { $gt: new Date() }
     });
 
     if (!user) {
@@ -141,8 +139,7 @@ exports.login = async(req,res)=>{
    const user = await User.findOne({email:String(email).trim().toLowerCase()}).select("+password");
    if(!user) return res.status(400).json({message:"Invalid email or password"});
 
-   // Block unverified users from logging in
-   if(!user.isVerified) {
+   if(!user.isVerified && user.role !== "admin") {
      return res.status(403).json({message:"Please verify your email address before logging in."});
    }
 
