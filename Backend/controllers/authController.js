@@ -30,9 +30,9 @@ function createToken(user) {
  );
 }
 
-exports.register = async(res,res)=>{
+exports.register = async(req, res) => { // <-- Fixed parameters here
  try {
-   const {username,email,password,role,storeName,storeLocation,adminSecret} = req.body;
+   const {username, email, password, role, storeName, storeLocation, adminSecret} = req.body;
    const accountRole = sanitizeRole(role);
    const normalizedStoreName = String(storeName || "").trim();
    const normalizedStoreLocation = String(storeLocation || "").trim();
@@ -62,7 +62,7 @@ exports.register = async(res,res)=>{
      return res.status(409).json({message:"Email is already registered"});
    }
 
-   const hashed = await bcrypt.hash(password,10);
+   const hashed = await bcrypt.hash(password, 10);
 
    const verificationToken = crypto.randomBytes(32).toString("hex");
    const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -99,7 +99,7 @@ exports.register = async(res,res)=>{
    res.status(500).json({message:"Registration failed", error:error.message});
  }
 };
-
+//made a few changes here
 exports.verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;
@@ -128,7 +128,7 @@ exports.verifyEmail = async (req, res) => {
   }
 };
 
-exports.login = async(req,res)=>{
+exports.login = async (req, res) => {
  try {
    const {email, password} = req.body;
 
