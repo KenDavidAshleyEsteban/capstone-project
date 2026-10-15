@@ -17,6 +17,9 @@ test('catalog API persists products and photos and enforces store ownership', { 
     await mongoose.disconnect();
   });
   await mongoose.connect(process.env.TEST_MONGODB_URI, { dbName: database });
+  // Registration is tested locally; never initialize or contact an email provider.
+  const emailModule = require.resolve('../utils/sendEmail');
+  require.cache[emailModule] = { id: emailModule, filename: emailModule, loaded: true, exports: async () => {} };
   await Product.init();
   const password = await bcrypt.hash('Catalog-test-password!', 4);
   const [admin, seller, other, buyer] = await Promise.all([
@@ -49,6 +52,14 @@ test('catalog API persists products and photos and enforces store ownership', { 
   assert.equal((await api('/products', seller, 'POST', kit)).status, 409);
   assert.equal((await api('/admin/dashboard', seller)).data.products.length, 1);
   assert.equal((await api('/admin/dashboard', other)).data.products.length, 0);
+  assert.equal((await api('/admin/stock')).status, 401);
+  assert.equal((await api('/admin/stock', buyer)).status, 403);
+  assert.equal((await api('/admin/stock', other)).data.products.length, 0);
+  const snapshot = (await api('/admin/stock', seller)).data.products;
+  assert.equal(snapshot[0].stock, 12);
+  assert.equal(snapshot[0].image, undefined);
+  assert.equal(snapshot[0].__v, 0);
+  assert.equal((await api('/products/stock')).data.products[0].stock, 12);
   assert.equal((await api(`/products/${created.data._id}`, other, 'PUT', { stock: 0 })).status, 404);
   assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { stock: -1 })).status, 400);
   assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { storeId: String(other._id) })).status, 400);
@@ -57,6 +68,8 @@ test('catalog API persists products and photos and enforces store ownership', { 
   assert.equal(edited.data.status, 'Low Stock');
   assert.equal(edited.data.image, 'images/product-placeholder.svg');
   assert.equal((await Product.findById(created.data._id)).price, 1234.56);
+  assert.equal((await api(`/products/${created.data._id}`, seller, 'PUT', { stock: 100, expectedVersion: 0 })).status, 409);
+  assert.equal((await Product.findById(created.data._id)).stock, 3);
   assert.equal((await api('/products')).data[0].name, 'Updated kit');
   const overview = (await api('/admin/dashboard', admin)).data;
   assert.equal(overview.stats.totalUsers, 4);

@@ -1,4 +1,70 @@
 /* Beginner guide page styles */
+.guide-infographic { margin: 0 0 24px; padding: clamp(20px, 3vw, 36px); border: 1px solid var(--line); border-radius: 28px; background: linear-gradient(135deg, rgba(255, 122, 24, .07), transparent 65%), var(--surface); box-shadow: var(--shadow); }
+.guide-infographic-heading { max-width: 900px; margin-bottom: 24px; }
+.guide-infographic-heading h2 { margin-bottom: 12px; font-size: clamp(1.6rem, 3vw, 2.8rem); }
+.guide-infographic-heading p, .guide-cut-diagram p, .guide-grade-detail p { color: #cbd5e1; }
+.guide-scale-chart { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding: 10px 0 22px; background: repeating-linear-gradient(to top, transparent 0 59px, rgba(255, 255, 255, .05) 59px 60px); }
+.guide-scale-column { display: grid; justify-items: center; gap: 6px; text-align: center; }
+.guide-scale-figure { display: flex; align-items: flex-end; justify-content: center; height: clamp(180px, 26vw, 290px); width: 100%; }
+.guide-scale-figure > div { width: 100%; display: flex; justify-content: center; }
+.guide-scale-figure svg { height: 100%; width: auto; max-width: 100%; }
+.guide-mech-outline { fill: rgba(255, 255, 255, .04); stroke: #cbd5e1; stroke-width: 2; stroke-linejoin: round; }
+.guide-mech-accent { fill: var(--orange); }
+.guide-scale-column strong { color: var(--yellow); font-size: clamp(1.3rem, 3vw, 2rem); }
+.guide-scale-column > span { font-weight: 700; }
+.guide-scale-column small { color: #cbd5e1; }
+.guide-infographic-footnote { margin-top: 18px; color: #aebaca; font-size: .82rem; line-height: 1.8; }
+.guide-infographic-footnote a { color: var(--yellow); text-decoration: underline; }
+.guide-grade-choices { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.guide-grade-choice { padding: 16px 10px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255, 255, 255, .03); color: var(--text); font-size: 1.4rem; font-weight: 800; }
+.guide-grade-choice small { display: block; margin-top: 6px; font-size: .72rem; font-weight: 400; line-height: 1.4; }
+.guide-grade-choice[aria-pressed="true"] { border-color: var(--orange); background: rgba(255, 122, 24, .12); color: var(--yellow); }
+.guide-grade-detail { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 28px; align-items: center; margin-top: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 22px; background: rgba(255, 255, 255, .03); }
+.guide-explorer-emblem { display: grid; justify-items: center; gap: 12px; color: var(--yellow); font-size: 2.5rem; font-weight: 900; }
+.guide-explorer-emblem svg { width: 100px; height: 150px; }
+.guide-grade-detail h3 { font-size: clamp(1.3rem, 2vw, 1.8rem); }
+.guide-explorer-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.guide-explorer-facts dt { margin-bottom: 6px; color: #aebaca; font-size: .75rem; text-transform: uppercase; }
+.guide-explorer-facts dd { font-weight: 700; }
+.guide-cut-diagram { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; list-style: none; }
+.guide-cut-diagram li { padding: 18px; border: 1px solid var(--line); border-radius: 22px; background: rgba(255, 255, 255, .03); }
+.guide-cut-diagram svg { display: block; width: 100%; max-height: 180px; }
+.guide-cut-diagram h3 span { display: inline-block; margin-right: 8px; color: var(--orange); }
+.guide-runner-line { fill: none; stroke: var(--orange); stroke-width: 8; }
+.guide-plastic-part { fill: rgba(255, 255, 255, .06); stroke: #cbd5e1; stroke-width: 2; }
+.guide-cut-line { stroke: #ff7581; stroke-width: 3; stroke-dasharray: 5 4; }
+.guide-tool-line { fill: none; stroke: #cbd5e1; stroke-width: 3; stroke-linecap: round; }
+.guide-sanding-stick { fill: rgba(255, 226, 106, .15); stroke: var(--yellow); stroke-width: 2; }
+.guide-clean-edge { stroke: var(--yellow); stroke-width: 3; }
+.guide-diagram-key { display: inline-block; margin-right: 16px; color: var(--orange); }
+.guide-diagram-key.cut { color: #ff7581; }
+@media (max-width: 980px) { .guide-grade-choices { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .guide-scale-chart { gap: 10px; } .guide-scale-figure { height: clamp(90px, 25vw, 160px); } .guide-grade-detail { grid-template-columns: minmax(0, 1fr); padding: 18px; } .guide-explorer-emblem { grid-template-columns: auto auto; align-items: center; justify-content: center; gap: 24px; } .guide-explorer-emblem svg { width: 60px; height: 90px; } .guide-explorer-facts, .guide-cut-diagram { grid-template-columns: minmax(0, 1fr); } .guide-grade-choice { padding: 14px 8px; } }
+
+.guide-my-uploads { display: grid; gap: 16px; margin: 24px 0; }
+.guide-my-uploads[hidden] { display: none; }
+.guide-upload-help, #guideUploadStatus, .guide-my-uploads > p { color: #cbd5e1; font-size: .85rem; }
+#guideUploadProgress { width: 100%; accent-color: var(--orange); }
+#guideUploadProgress[hidden] { display: none; }
+.build-video-preview { display: grid; place-items: center; min-height: 180px; padding: 12px; border: 1px solid var(--line); border-radius: 18px; background: #05070b; }
+.build-video-preview video { display: block; width: 100%; }
+.video-review-form { display: grid; gap: 12px; margin-top: 16px; }
+.video-review-form label { display: grid; gap: 8px; }
+.video-review-form .hero-actions { margin-top: 0; }
+.video-review-form textarea { min-height: 90px; }
+.build-video-file, .build-video-review-note { margin: 12px 0; font-size: .85rem; overflow-wrap: anywhere; }
+.video-action-status { margin-top: 12px; color: var(--yellow); }
+.video-review-history { margin-top: 14px; font-size: .85rem; }
+.video-review-history summary { cursor: pointer; color: var(--yellow); }
+.video-review-history ul { padding-left: 20px; }
+.video-review-history li { margin-top: 10px; color: #cbd5e1; }
+.video-withdraw-btn { margin-top: 16px; }
+.video-pagination { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 16px; margin: 18px 0; }
+.video-pagination button:disabled { opacity: .4; cursor: not-allowed; }
+.video-review-toolbar { align-items: end; }
+.video-review-toolbar label { display: grid; gap: 8px; }
+#videoReviewStatus { margin: 20px 0; color: var(--yellow); }
+
 .guide-hero {
   position: relative;
   display: grid;

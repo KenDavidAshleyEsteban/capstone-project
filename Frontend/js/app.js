@@ -9,15 +9,11 @@
     receipts: "gunpla.receipts.v1",
     transactions: "gunpla.transactions.v1",
     redemptions: "gunpla.redemptions.v1",
-    rsvps: "gunpla.rsvps.v1",
     account: "gunpla.account.v1",
     inventory: "gunpla.inventory.v1",
     reservations: "gunpla.reservations.v1",
     sellerOffers: "gunpla.sellerOffers.v1"
   };
-  const guideVideoDbName = "gunpla.guideVideos.v1";
-  const guideVideoStoreName = "videos";
-  let guideVideoObjectUrls = [];
 
   const read = (key, fallback) => {
     try {
@@ -38,10 +34,13 @@
     seller: "Seller"
   };
   const accountRoles = ["buyer", "seller", "admin"];
-const API = location.hostname === "localhost" || location.hostname === "127.0.0.1" 
-  ? "http://localhost:5000/api" 
-  : "https://capstone-project-35cd.onrender.com/api";
+  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
+    ? "http://localhost:5000/api"
+    : "https://capstone-project-35cd.onrender.com/api");
   let navOutsideCloseBound = false;
+  let activeStockMonitor;
+  let drawPublicProducts;
+  const sellerRevenueSettings = { period: "daily", days: 28 };
 
   function normalizeAccountRole(role) {
     const normalized = String(role || "").trim().toLowerCase();
@@ -246,6 +245,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     const sellerLinks = [
       { id: "catalog", label: "Manage products", href: "admin-dashboard.html" },
       { id: "seller", label: "Dashboard", href: "seller-dashboard.html" },
+      { id: "seller-predictions", label: "Predictions", href: "seller-dashboard.html#sellerPredictions" },
       { id: "seller-offers", label: "Offers & Services", href: "seller-dashboard.html#sellerOffers" },
       { id: "seller-stock", label: "Stock Control", href: "seller-dashboard.html#sellerStock" },
       { id: "seller-insights", label: "Insights", href: "seller-dashboard.html#sellerInsights" }
@@ -255,12 +255,17 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
 
     if (role === "buyer") items.push(navMenu("buyer", "Buyer", buyerLinks));
     if (role === "seller") items.push(navMenu("seller", "Seller", sellerLinks));
-    if (role === "admin") items.push(navItem("admin", "Admin dashboard", "admin-dashboard.html"));
+    if (role === "admin") {
+      items.push(navItem("admin", "Admin dashboard", "admin-dashboard.html"));
+      items.push(navItem("video-review", "Video review", "video-review.html"));
+    }
 
     return items.join("");
   }
 
   function shell(content) {
+    activeStockMonitor?.stop();
+    activeStockMonitor = null;
     app.innerHTML = `
       <header class="topbar">
         <div class="nav-wrap">
@@ -413,177 +418,17 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     return `${size} B`;
   }
 
-  function openGuideVideoDb() {
-    return new Promise((resolve, reject) => {
-      if (!window.indexedDB) {
-        reject(new Error("IndexedDB is not available."));
-        return;
-      }
-
-      const request = indexedDB.open(guideVideoDbName, 1);
-
-      request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(guideVideoStoreName)) {
-          db.createObjectStore(guideVideoStoreName, { keyPath: "id" });
-        }
-      };
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Unable to open video storage."));
-    });
-  }
-
-  async function useGuideVideoStore(mode, operation) {
-    const db = await openGuideVideoDb();
-
-    return new Promise((resolve, reject) => {
-      const transaction = db.transaction(guideVideoStoreName, mode);
-      const store = transaction.objectStore(guideVideoStoreName);
-      let request;
-
-      transaction.oncomplete = () => db.close();
-      transaction.onerror = () => {
-        db.close();
-        reject(transaction.error || new Error("Video storage transaction failed."));
-      };
-
-      try {
-        request = operation(store);
-      } catch (error) {
-        db.close();
-        reject(error);
-        return;
-      }
-
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error("Video storage request failed."));
-    });
-  }
-
-  async function getGuideVideos() {
-    const videos = await useGuideVideoStore("readonly", (store) => store.getAll());
-    return (videos || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }
-
-  function saveGuideVideo(video) {
-    return useGuideVideoStore("readwrite", (store) => store.put(video));
-  }
-
-  function deleteGuideVideo(id) {
-    return useGuideVideoStore("readwrite", (store) => store.delete(id));
-  }
-
-  function revokeGuideVideoUrls() {
-    guideVideoObjectUrls.forEach((url) => URL.revokeObjectURL(url));
-    guideVideoObjectUrls = [];
-  }
-
-  function guideVideoCard(video, account) {
-    const url = URL.createObjectURL(video.blob);
-    const owner = account?.email || "";
-    const canRemove = owner && video.owner === owner;
-    const uploadedAt = new Date(video.createdAt).toLocaleDateString();
-
-    guideVideoObjectUrls.push(url);
-
-    return `
-      <article class="guide-video-card">
-        <video src="${url}" controls preload="metadata"></video>
-        <div>
-          <div class="card-row">
-            <span class="pill yellow">${escapeHtml(video.grade)}</span>
-            <small>${escapeHtml(uploadedAt)}</small>
-          </div>
-          <h3>${escapeHtml(video.title)}</h3>
-          <p>${escapeHtml(video.notes || "Builder showcase upload.")}</p>
-          <small>By ${escapeHtml(video.builder)} · ${escapeHtml(roleLabels[video.role] || "Builder")} · ${escapeHtml(formatBytes(video.size))}</small>
-          ${canRemove ? `<button class="ghost-btn guide-video-delete" type="button" data-video-id="${escapeHtml(video.id)}">Remove</button>` : ""}
-        </div>
-      </article>
-    `;
-  }
-
-  async function drawGuideVideos() {
-    const gallery = byId("guideVideoGallery");
-    if (!gallery) return;
-
-    gallery.innerHTML = `<div class="empty">Loading build videos...</div>`;
-
-    try {
-      const account = currentAccount();
-      const videos = await getGuideVideos();
-      revokeGuideVideoUrls();
-
-      gallery.innerHTML = videos.length
-        ? videos.map((video) => guideVideoCard(video, account)).join("")
-        : `<div class="empty">No Gundam build videos uploaded yet.</div>`;
-
-      document.querySelectorAll(".guide-video-delete").forEach((button) => {
-        button.addEventListener("click", async () => {
-          await deleteGuideVideo(button.dataset.videoId);
-          drawGuideVideos();
-        });
-      });
-    } catch (error) {
-      console.error("Failed loading guide build videos:", error);
-      gallery.innerHTML = `<div class="empty">Video storage is unavailable in this browser session.</div>`;
-    }
-  }
-
   function bindGuideVideoFeature() {
-    const form = byId("guideVideoForm");
-    drawGuideVideos();
+    window.GUNPLA_BUILD_VIDEOS.mountGuide({ api: API, account: currentAccount() });
+  }
 
-    form?.addEventListener("submit", async (event) => {
-      event.preventDefault();
-
-      if (!requireActionAccess(["buyer", "seller"], "upload build videos")) return;
-
-      const file = byId("guideVideoFile")?.files?.[0];
-      if (!file || !file.type.startsWith("video/")) {
-        alert("Please choose a valid video file.");
-        return;
-      }
-
-      if (file.size > 100 * 1024 * 1024) {
-        alert("Please choose a video under 100 MB for the local demo gallery.");
-        return;
-      }
-
-      const account = currentAccount();
-      const role = currentRole();
-      const title = byId("guideVideoTitle").value.trim() || file.name.replace(/\.[^/.]+$/, "");
-      const video = {
-        id: `build-video-${Date.now()}`,
-        title,
-        grade: byId("guideVideoGrade").value,
-        notes: byId("guideVideoNotes").value.trim(),
-        builder: account?.username || account?.email || roleLabels[role],
-        owner: account?.email || "",
-        role,
-        fileName: file.name,
-        size: file.size,
-        type: file.type,
-        createdAt: new Date().toISOString(),
-        blob: file
-      };
-
-      try {
-        await saveGuideVideo(video);
-        form.reset();
-        await drawGuideVideos();
-        openModal(`
-          <h2>Build video uploaded</h2>
-          <p>${escapeHtml(title)} is now listed in the guide showcase.</p>
-          <button class="primary-btn" type="button" id="guideVideoDone">Done</button>
-        `);
-        byId("guideVideoDone")?.addEventListener("click", closeModal);
-      } catch (error) {
-        console.error("Failed saving guide build video:", error);
-        alert("Unable to save the video in this browser session.");
-      }
-    });
+  function renderVideoReview() {
+    if (!requirePageAccess(["admin"])) return;
+    shell(
+      titleBlock("Admin review", "Monitor build video uploads", "Review submitted videos before publishing. Track the uploader, upload date, file size, and approval status.") +
+      '<section class="toolbar video-review-toolbar"><label for="videoReviewFilter">Upload status<select id="videoReviewFilter"><option value="pending">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="uploading">Uploading</option><option value="awaiting-upload">Waiting for file</option><option value="failed">Failed</option><option value="removed">Withdrawn</option><option value="all">All uploads</option></select></label><button id="refreshVideoReview" type="button" class="ghost-btn">Refresh queue</button><a href="beginner-guide.html#buildVideos" class="ghost-btn">Open public gallery</a></section><p id="videoReviewStatus" role="status"></p><section id="videoReviewList" class="guide-video-gallery" aria-label="Video review queue"></section>'
+    );
+    window.GUNPLA_BUILD_VIDEOS.mountReview({ api: API, account: currentAccount() });
   }
 
   function getInventoryOverrides() {
@@ -653,6 +498,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       productId: product.id,
       productName: product.name,
       store: store?.name || receipt.store,
+      storeId: product.storeId,
       customer: "Demo Builder",
       status: getProductStatus(product) === "Pre-order" ? "Pre-order" : "For Pickup",
       amount: receipt.amount,
@@ -674,7 +520,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     const status = getProductStatus(product);
 
     return `
-      <article class="product-card">
+      <article class="product-card" data-product-key="${escapeHtml(product._id || product.id)}">
         <div class="product-art">
           <img src="${escapeHtml(safeProductImage(product.image))}" alt="${escapeHtml(product.name)}">
         </div>
@@ -755,49 +601,18 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     `);
   }
 
-  function recordSellerSale(item) {
-    if (!item) return;
-
-    const receipt = {
-      id: `GH-${Math.floor(100000 + Math.random() * 900000)}`,
-      store: "Seller Dashboard",
-      amount: Number(item.price) || 0,
-      points: Math.floor((Number(item.price) || 0) / 10),
-      items: item.name,
-      date: new Date().toISOString().slice(0, 10),
-      source: "seller-offer",
-      offerId: item.id,
-      category: item.category
-    };
-
-    const receipts = getReceipts();
-    receipts.unshift(receipt);
-    write(keys.receipts, receipts);
-
-    if (item.offerType === "seller-offer") {
-      const offers = getSellerOffers().map((offer) => {
-        if (offer.id !== item.id) return offer;
-
-        const stock = Math.max(0, Number(offer.stock || 0) - 1);
-        return {
-          ...offer,
-          stock,
-          status: stock <= 0 ? (offer.category === "Service" ? "Fully Booked" : "Out of Stock") : offer.status
-        };
-      });
-
-      setSellerOffers(offers);
-    }
-
-    openModal(`
-      <h2>Sale recorded</h2>
-      <p>${escapeHtml(item.name)} was added as receipt <b>${receipt.id}</b> for ${money(receipt.amount)}.</p>
-      <button class="primary-btn" id="sellerSaleDone" type="button">Done</button>
-    `);
-    byId("sellerSaleDone")?.addEventListener("click", () => {
-      closeModal();
-      renderSeller();
+  async function recordSellerSale(item) {
+    const sale = await window.GUNPLA_SALES.record(API, currentAccount().token, {
+      requestId: item.requestId, type: "offer", name: item.name, category: item.category,
+      offerId: item.id, quantity: 1, unitPrice: Number(item.price),
+      date: window.GUNPLA_SALES.today(), deductStock: false
     });
+    setSellerOffers(getSellerOffers().map((offer) => {
+      if (offer.id !== item.id) return offer;
+      const stock = Math.max(0, Number(offer.stock || 0) - 1);
+      return { ...offer, stock, status: stock <= 0 ? (offer.category === "Service" ? "Fully Booked" : "Out of Stock") : offer.status };
+    }));
+    await renderSeller("Sale " + sale.id + " recorded. Sales analytics have been refreshed.");
   }
 
   function bindReserveButtons() {
@@ -826,7 +641,12 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       </section>
       <section class="section-head"><div><p class="kicker">Featured kits</p><h2>Built for beginners and collectors</h2></div><a class="ghost-btn" href="discover.html">See all</a></section>
       <section class="product-grid" id="featuredProducts">${DATA.products.slice(0, 3).map(productCard).join("") || `<div class="empty">No kits listed yet.</div>`}</section>
+      <div class="stock-monitor-bar"><p id="publicStockStatus" role="status">Checking stock availability…</p><button type="button" id="publicStockRefresh" class="ghost-btn">Check stock now</button></div>
     `);
+    drawPublicProducts = () => {
+      byId("featuredProducts").innerHTML = DATA.products.slice(0, 3).map(productCard).join("") || '<div class="empty">No kits listed yet.</div>';
+      bindReserveButtons();
+    };
     bindReserveButtons();
   }
 
@@ -835,6 +655,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       ${titleBlock("Product discovery", "Find the right kit faster", "Search by name, grade, skill level, availability, or local store.")}
       <section class="toolbar"><input id="search" placeholder="Search kits"><select id="grade"><option value="all">All grades</option><option>EG</option><option>HG</option><option>RG</option><option>MG</option><option>PG</option><option>SD</option><option>RE/100</option><option>Other</option></select><select id="skill"><option value="all">All skill levels</option><option>Beginner</option><option>Intermediate</option><option>Advanced</option></select></section>
       <section class="product-grid" id="products"></section>
+      <div class="stock-monitor-bar"><p id="publicStockStatus" role="status">Checking stock availability…</p><button type="button" id="publicStockRefresh" class="ghost-btn">Check stock now</button></div>
     `);
 
     const draw = () => {
@@ -850,6 +671,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     };
 
     ["search", "grade", "skill"].forEach((id) => byId(id).addEventListener("input", draw));
+    drawPublicProducts = draw;
     draw();
   }
 
@@ -938,11 +760,14 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
             </select>
           </label>
           <label class="wide">Build notes<textarea id="guideVideoNotes" maxlength="220" placeholder="Paint, panel lining, tools used, or build difficulty"></textarea></label>
-          <label class="wide">Build video<input id="guideVideoFile" type="file" accept="video/*" required></label>
-          <button class="primary-btn" type="submit">Upload video</button>
+          <label class="wide">Build video<input id="guideVideoFile" type="file" accept="video/mp4,video/webm,video/ogg" required></label>
+          <p class="guide-upload-help wide">MP4, WebM, or Ogg, up to 100 MB. An admin must approve your video before it appears publicly.</p>
+          <progress id="guideUploadProgress" class="wide" value="0" max="100" aria-label="Video upload progress" hidden></progress>
+          <p id="guideUploadStatus" class="wide" role="status"></p>
+          <button class="primary-btn" type="submit">Submit for review</button>
         </form>
       `
-      : `
+      : currentRole() === "admin" ? `<article class="guide-video-lock"><h3>Build video review</h3><p>Review pending uploads before publishing them to the gallery.</p><a class="primary-btn" href="video-review.html">Open review queue</a></article>` : `
         <article class="guide-video-lock">
           <p class="kicker">Buyer or seller access</p>
           <h3>Login to upload a build video</h3>
@@ -966,8 +791,10 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       </section>
 
       <section class="section-head" id="gradeGuide">
-
+        <div><p class="kicker">Visual field guide</p><h2>Get to know your next build</h2></div>
       </section>
+
+      <div id="guideInfographics"></div>
 
       <section class="guide-grade-grid">
         ${grades.map((grade) => `
@@ -1017,7 +844,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
           <div>
             <p class="kicker">Community upload</p>
             <h3>Share your finished kit or work in progress</h3>
-            <p>Buyers and sellers can post short local showcase videos for other builders browsing the beginner guide.</p>
+            <p>Buyers and sellers can submit build videos for admin review. Only approved videos appear in the public gallery.</p>
           </div>
           ${videoUploadPanel}
         </article>
@@ -1025,6 +852,8 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
           <div class="empty">Loading build videos...</div>
         </div>
       </section>
+
+      <section id="guideMyUploads" class="guide-my-uploads" aria-label="My video uploads" hidden></section>
 
       <section class="guide-columns">
         <article class="info-card dark">
@@ -1053,47 +882,100 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
         </article>
       </section>
     `);
+    window.GUNPLA_GUIDE_INFOGRAPHICS.mount({ container: byId("guideInfographics"), grades });
     bindGuideVideoFeature();
   }
 
   function renderStores() {
     shell(`
-      ${titleBlock("Store network", "Local stores with clearer stock visibility", "Find partner shops, specialties, and store details without messaging several sellers first.")}
-      <section class="toolbar single"><input id="storeSearch" placeholder="Search store, barangay, specialty"></section>
-      <section class="store-grid" id="stores"></section>
+      ${titleBlock("Store network", "Explore your local hobby stores", "Browse the map, discover partner shops, and explore the area before your next visit.")}
+      <section class="toolbar single" aria-label="Find stores">
+        <label for="storeSearch" class="store-search-label">Find a store</label>
+        <input type="search" id="storeSearch" placeholder="Search store, barangay, specialty" aria-controls="stores" />
+      </section>
+      <section class="store-map-panel" aria-labelledby="storeMapTitle">
+        <div class="store-map-heading">
+          <div><span class="pill yellow">Baguio City</span><h2 id="storeMapTitle">Explore the neighborhood</h2><p>Choose a pin or select a shop below to see its area.</p></div>
+          <button type="button" class="ghost-btn" id="showAllStores">Show all stores</button>
+        </div>
+        <div id="storeMap" class="store-map" role="region" aria-label="Map of local store areas in Baguio" aria-describedby="storeMapNote storeMapStatus" tabindex="0"></div>
+        <div class="store-map-caption">
+          <p id="storeMapNote">Pins show approximate building, street, or neighborhood locations. Check the listed stall or shop address before visiting.</p>
+          <p id="storeMapStatus" role="status"></p>
+        </div>
+      </section>
+      <p class="store-results" id="storeResults" role="status"></p>
+      <section class="store-grid" id="stores" aria-label="Matching stores"></section>
     `);
 
-    const draw = () => {
-      const query = byId("storeSearch").value.toLowerCase();
-      const stores = DATA.stores.filter((store) => `${store.name} ${store.barangay} ${store.specialties.join(" ")}`.toLowerCase().includes(query));
-      byId("stores").innerHTML = stores.map((store) => `
-        <article class="info-card">
-          <div class="card-row"><span class="pill red">${store.barangay}</span><span>★ ${store.rating}</span></div>
-          <h3>${store.name}</h3><p>${store.description}</p>
-          <small>${store.location}</small>
-          <div class="card-row wrap">${store.specialties.map((item) => `<span class="pill">${item}</span>`).join("")}</div>
-        </article>`).join("");
+    const mapFeature = window.GUNPLA_STORE_MAP;
+    const mapContainer = byId("storeMap");
+    let selectedId = null;
+    const selectStore = (id, moveToMap = false) => {
+      selectedId = id;
+      byId("stores").querySelectorAll("[data-store-id]").forEach((card) => {
+        const selected = card.dataset.storeId === id;
+        card.classList.toggle("is-selected", selected);
+        card.querySelector(".store-map-btn")?.setAttribute("aria-pressed", String(selected));
+      });
+      storeMap.selectStore(id);
+      if (moveToMap) {
+        mapContainer.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "center" });
+        mapContainer.focus({ preventScroll: true });
+      }
     };
+    const storeMap = mapFeature.create({ container: mapContainer, status: byId("storeMapStatus"), onSelect: selectStore });
+    byId("showAllStores").disabled = !storeMap.available;
+
+    const draw = () => {
+      const query = byId("storeSearch").value.trim().toLowerCase();
+      const stores = DATA.stores.filter((store) => `${store.name} ${store.barangay} ${store.location} ${store.specialties.join(" ")}`.toLowerCase().includes(query));
+      if (!stores.some((store) => store.id === selectedId)) selectedId = null;
+      byId("storeResults").textContent = `${stores.length} ${stores.length === 1 ? "store" : "stores"} found${query ? " for your search" : " in Baguio"}`;
+      byId("showAllStores").disabled = !storeMap.available || !stores.length;
+      byId("stores").innerHTML = stores.map((store) => {
+        const urls = mapFeature.links(store);
+        const canShowOnMap = storeMap.available && mapFeature.hasCoordinates(store);
+        return `
+        <article class="info-card store-card" data-store-id="${escapeHtml(store.id)}">
+          <div class="card-row"><span class="pill red">${escapeHtml(store.barangay)}</span>${Number.isFinite(store.rating) ? `<span aria-label="Rated ${escapeHtml(store.rating)} out of 5">★ ${escapeHtml(store.rating)}</span>` : ""}</div>
+          <h3>${escapeHtml(store.name)}</h3><p>${escapeHtml(store.description)}</p>
+          <small>${escapeHtml(store.location)}</small>
+          <div class="card-row wrap">${store.specialties.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("")}</div>
+          <div class="store-card-actions">
+            ${canShowOnMap
+              ? `<button type="button" class="primary-btn store-map-btn" aria-label="View ${escapeHtml(store.name)} on map" aria-controls="storeMap" aria-pressed="false">View on map</button>`
+              : `<a class="primary-btn" href="${escapeHtml(urls.map)}" target="_blank" rel="noopener noreferrer">Open map ↗</a>`}
+            <a class="ghost-btn" href="${escapeHtml(urls.directions)}" target="_blank" rel="noopener noreferrer" aria-label="Directions to the ${escapeHtml(store.name)} area (opens Google Maps)">Directions ↗</a>
+          </div>
+          ${urls.streetView ? `<a class="store-street-view" href="${escapeHtml(urls.streetView)}" target="_blank" rel="noopener noreferrer" aria-label="Street View near ${escapeHtml(store.name)} (opens Google Maps)">Street View nearby ↗</a>` : ""}
+        </article>`;
+      }).join("") || `<div class="empty store-empty"><h3>No stores found</h3><p>Try a different store name, barangay, or specialty.</p><button type="button" class="ghost-btn" id="clearStoreSearch">Clear search</button></div>`;
+      storeMap.setStores(stores);
+      if (selectedId) selectStore(selectedId);
+    };
+    byId("stores").addEventListener("click", (event) => {
+      const button = event.target.closest(".store-map-btn");
+      if (button) selectStore(button.closest("[data-store-id]").dataset.storeId, true);
+      if (event.target.closest("#clearStoreSearch")) {
+        byId("storeSearch").value = "";
+        draw();
+        byId("storeSearch").focus();
+      }
+    });
+    byId("showAllStores").addEventListener("click", () => {
+      selectedId = null;
+      byId("storeSearch").value = "";
+      draw();
+    });
     byId("storeSearch").addEventListener("input", draw);
     draw();
   }
 
   function renderEvents() {
-    shell(`${titleBlock("Community events", "Build nights, workshops, and showcases", "RSVP to local activities and encourage builders to join the local scene.")}<section class="event-list" id="events"></section>`);
-    const rsvps = read(keys.rsvps, []);
-    const isGuest = currentRole() === "guest";
-    byId("events").innerHTML = DATA.events.map((event) => {
-      const joined = !isGuest && rsvps.includes(event.id);
-      return `<article class="event-card"><div class="date-chip"><b>${event.day}</b><span>${event.month}</span></div><div><span class="pill yellow">${event.type}</span><h3>${event.title}</h3><p>${event.description}</p><small>${event.venue}</small></div><button class="${joined ? "ghost-btn" : "primary-btn"} rsvp-btn" data-id="${event.id}">${joined ? "Going" : isGuest ? "Login to RSVP" : "RSVP"}</button></article>`;
-    }).join("");
-    document.querySelectorAll(".rsvp-btn").forEach((button) => button.addEventListener("click", () => {
-      if (!requireActionAccess(["buyer", "seller"], "reserve event seats")) return;
-
-      const list = read(keys.rsvps, []);
-      const updated = list.includes(button.dataset.id) ? list.filter((id) => id !== button.dataset.id) : [...list, button.dataset.id];
-      write(keys.rsvps, updated);
-      renderEvents();
-    }));
+    shell(`${titleBlock("Community events", "Build nights, workshops, and showcases", "Explore event schedules, venues, activities, and registration details.")}<section id="events" aria-label="Browse community events"></section>`);
+    window.GUNPLA_EVENTS.load({ container: byId("events"), api: API, account: currentAccount(),
+      requireRsvpAccess: () => requireActionAccess(["buyer", "seller"], "RSVP to an event") });
   }
 
   function renderReceipts() {
@@ -1176,25 +1058,51 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     }));
   }
 
-  async function renderSeller() {
+  function sellerStockRow(product) {
+    return `<form class="seller-table-row seller-stock-form" data-id="${escapeHtml(product.id)}" data-current-stock="${product.liveStock}">
+      <span><b>${escapeHtml(product.name)}</b><small>${escapeHtml(product.grade)} · ${escapeHtml(product.skill)}</small></span>
+      <span><em class="pill ${statusClass(product.liveStatus)}">${escapeHtml(product.liveStatus)}</em></span>
+      <span><input name="stock" type="number" min="0" max="1000000" step="1" value="${product.liveStock}" aria-label="${escapeHtml(product.name)} stock"></span>
+      <span><b>${product.demandScore}</b><small>score</small></span>
+      <span class="seller-row-actions"><button class="ghost-btn seller-view-product" type="button" data-id="${escapeHtml(product.id)}">View</button><button class="ghost-btn" type="button" data-stock-reset hidden>Reset</button><button class="primary-btn" type="submit">Save</button></span>
+      <span class="stock-row-error" role="alert" hidden></span>
+    </form>`;
+  }
+
+  async function renderSeller(notice = "") {
     if (!requirePageAccess(["seller"])) return;
 
     const sellerAccount = currentAccount();
     let liveProductsList = [];
+    let storeOwner;
+    let recordedSales = [];
+    let revenueSales = [];
     
     try {
-      const response = await fetch(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${sellerAccount.token}` } });
+      const [response, salesResponse] = await Promise.all([
+        fetch(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${sellerAccount.token}` }, cache: "no-store" }),
+        fetch(`${API}/sales?days=366`, { headers: { Authorization: `Bearer ${sellerAccount.token}` }, cache: "no-store" })
+      ]);
+      if (!salesResponse.ok) throw new Error("Unable to load completed sales.");
+      revenueSales = (await salesResponse.json()).sales;
+      const today = window.GUNPLA_SALES.today();
+      const cutoff = new Date(`${today}T00:00:00Z`);
+      cutoff.setUTCDate(cutoff.getUTCDate() - 27);
+      recordedSales = revenueSales.filter((sale) => sale.date >= cutoff.toISOString().slice(0, 10) && sale.date <= today);
       if (!response.ok) throw new Error("Unable to load your store inventory.");
-      liveProductsList = (await response.json()).products;
+      const dashboard = await response.json();
+      liveProductsList = dashboard.products;
+      storeOwner = dashboard.user;
     } catch (error) {
       shell(`<section class="info-card dark"><h2>Unable to load your store inventory</h2><p>Check your connection and sign in again if your session expired.</p><a class="primary-btn" href="admin-dashboard.html">Open product catalog</a></section>`);
       return;
     }
 
-    const receipts = getReceipts();
-    const transactions = getTransactions();
-    const redemptions = getRedemptions();
-    const reservations = getSellerReservations();
+    const receipts = recordedSales;
+    const receiptIds = new Set(receipts.map((receipt) => receipt.id));
+    const transactions = getTransactions().filter((transaction) => receiptIds.has(transaction.receiptId));
+    const redemptions = [];
+    const reservations = getSellerReservations().filter((item) => item.storeId === storeOwner.id);
     const sellerOffers = getSellerOffers();
     const sellerOfferReceipts = receipts.filter((receipt) => receipt.source === "seller-offer");
     const offerSales = sellerOfferReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
@@ -1207,9 +1115,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       ...product,
       liveStock: Number(product.stock),
       liveStatus: product.status,
-      soldCount: receipts.filter((receipt) =>
-        receipt.items.toLowerCase().includes(product.name.toLowerCase())
-      ).length
+      soldCount: receipts.reduce((sum, receipt) => sum + receipt.lineItems.filter((line) => line.productId === product.id).reduce((quantity, line) => quantity + line.quantity, 0), 0)
     }));
 
     const sales = receipts.reduce((sum, receipt) => sum + Number(receipt.amount), 0);
@@ -1224,22 +1130,8 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
 
     const claimRate = receipts.length ? Math.round((transactions.length / receipts.length) * 100) : 0;
 
-    const salesByDate = receipts.reduce((map, receipt) => {
-      map[receipt.date] = (map[receipt.date] || 0) + Number(receipt.amount);
-      return map;
-    }, {});
-
-    const salesRows = Object.entries(salesByDate)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-6);
-
-    const maxSales = Math.max(1, ...salesRows.map(([, value]) => value));
-
     const demandRows = products.map((product) => {
-      const receiptHits = receipts.filter((receipt) =>
-        receipt.items.toLowerCase().includes(product.name.toLowerCase()) ||
-        receipt.items.toLowerCase().includes(product.grade.toLowerCase())
-      ).length;
+      const receiptHits = product.soldCount;
 
       const reservationHits = reservations.filter((item) =>
         item.productId === product.id ||
@@ -1268,7 +1160,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
 
     const gradeDemand = ["EG", "HG", "RG", "MG"].map((grade) => {
       const value =
-        receipts.filter((receipt) => receipt.items.toLowerCase().includes(grade.toLowerCase())).length +
+        receipts.reduce((sum, receipt) => sum + receipt.lineItems.filter((line) => line.grade === grade).reduce((units, line) => units + line.quantity, 0), 0) +
         products.filter((product) => product.grade === grade && product.liveStock <= 5).length;
 
       return { grade, value };
@@ -1288,29 +1180,30 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       ${titleBlock(
         "Seller analytics",
         "Data analytics for sales and inventory",
-        "A store-owner page for the capstone emerging technology: analytics that converts receipts, reservations, stock movement, QR claims, rewards, and buyer behavior into restocking decisions."
+        "Track sales, see where demand is heading, and plan your next restock."
       )}
 
       <section class="seller-command">
         <div>
-          <p class="kicker">Emerging technology</p>
-          <h2>Evidence-based seller control center</h2>
+          <p class="kicker">Store overview</p>
+          <h2>Your next restock, backed by data</h2>
           <p>
-            This dashboard follows the manuscript goal: use data analytics to monitor sales performance,
-            identify best-selling products, evaluate demand trends, and support inventory decisions.
+            Monitor sales performance, explore product demand, and look ahead with sales and stock predictions.
+            Completed sales and inventory are saved to your store. Record a sale below to include it in analytics and predictions.
           </p>
         </div>
 
         <div class="seller-actions">
           <a class="primary-btn" href="admin-dashboard.html">Add & edit products</a>
-          <button class="primary-btn" id="sellerAddSale">Simulate sale + QR receipt</button>
-          <button class="ghost-btn" id="sellerResetInventory">Reset stock demo</button>
+          <a class="ghost-btn" href="#sellerPredictions">View predictions</a>
+          <a class="primary-btn" href="#sellerSales">Record completed sale</a>
         </div>
       </section>
 
+      <p id="sellerSavedNotice" role="status">${typeof notice === "string" ? escapeHtml(notice) : ""}</p>
       <section class="metric-grid seller-metric-grid">
         <article>
-          <span>Total sales</span>
+          <span>Sales · last 28 days</span>
           <b>${money(sales)}</b>
           <small>${receipts.length} digital receipts</small>
         </article>
@@ -1323,8 +1216,8 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
 
         <article>
           <span>Stock health</span>
-          <b>${stockHealth}%</b>
-          <small>${lowStockProducts.length} low-stock kits</small>
+          <b id="sellerStockHealth">${stockHealth}%</b>
+          <small id="sellerLowStockCount">${lowStockProducts.length} low-stock kits</small>
         </article>
 
         <article>
@@ -1335,13 +1228,13 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
 
         <article>
           <span>Top demand signal</span>
-          <b>${topProduct?.grade || "--"}</b>
-          <small>${escapeHtml(topProduct?.name || "No product data yet")}</small>
+          <b id="sellerTopDemandGrade">${topProduct?.grade || "--"}</b>
+          <small id="sellerTopDemandName">${escapeHtml(topProduct?.name || "No product data yet")}</small>
         </article>
 
         <article>
           <span>Restock budget signal</span>
-          <b>${money(restockEstimate)}</b>
+          <b id="sellerRestockEstimate">${money(restockEstimate)}</b>
           <small>Estimated value to refill low stock to 12 units</small>
         </article>
 
@@ -1363,6 +1256,10 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
           <small>Tools or supplies at 3 units or less</small>
         </article>
       </section>
+
+      <section class="seller-sales-panel" id="sellerSales" aria-labelledby="sellerSalesTitle"></section>
+
+      <section class="seller-predictions" id="sellerPredictions" aria-labelledby="sellerPredictionsTitle"></section>
 
       <section class="seller-offer-panel" id="sellerOffers">
         <div class="seller-panel-head">
@@ -1410,25 +1307,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       </section>
 
       <section class="seller-grid">
-        <article class="info-card dark seller-panel wide">
-          <div class="seller-panel-head">
-            <div>
-              <p class="kicker">Sales trend</p>
-              <h3>Daily receipt revenue</h3>
-            </div>
-            <span class="pill green">Live from receipts</span>
-          </div>
-
-          ${
-            salesRows.map(([date, value]) => `
-              <div class="seller-bar-row">
-                <span>${date}</span>
-                <div><i style="width:${Math.max(8, (value / maxSales) * 100)}%"></i></div>
-                <strong>${money(value)}</strong>
-              </div>
-            `).join("") || `<div class="empty">No sales data yet.</div>`
-          }
-        </article>
+        <article class="info-card dark seller-panel wide" id="sellerRevenue" aria-labelledby="receiptRevenueTitle"></article>
 
         <article class="info-card dark seller-panel">
           <div class="seller-panel-head">
@@ -1459,8 +1338,11 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
               <p class="kicker">Inventory visibility</p>
               <h3>Stock movement and restock actions</h3>
             </div>
-            <span class="pill yellow">Live Database Connection</span>
+            <span class="pill yellow">Automatic stock monitoring</span>
           </div>
+
+          <div class="stock-monitor-bar"><p id="sellerStockSync" role="status">Checking stock…</p><button id="sellerStockRefresh" class="ghost-btn" type="button">Check stock now</button></div>
+          <div id="sellerStockSnapshot"></div>
 
           <div class="seller-table">
             <div class="seller-table-head">
@@ -1471,34 +1353,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
               <span>Action</span>
             </div>
 
-            ${
-              demandRows.map((product) => `
-                <form class="seller-table-row seller-stock-form" data-id="${escapeHtml(product.id)}">
-                  <span>
-                    <b>${escapeHtml(product.name)}</b>
-                    <small>${product.grade} · ${product.skill}</small>
-                  </span>
-
-                  <span>
-                    <em class="pill ${statusClass(product.liveStatus)}">${product.liveStatus}</em>
-                  </span>
-
-                  <span>
-                    <input name="stock" type="number" min="0" value="${product.liveStock}" aria-label="${escapeHtml(product.name)} stock">
-                  </span>
-
-                  <span>
-                    <b>${product.demandScore}</b>
-                    <small>score</small>
-                  </span>
-
-                  <span class="seller-row-actions">
-                    <button class="ghost-btn seller-view-product" type="button" data-id="${escapeHtml(product.id)}">View</button>
-                    <button class="primary-btn" type="submit">Save</button>
-                  </span>
-                </form>
-              `).join("")
-            }
+            <div id="sellerStockRows">${demandRows.map(sellerStockRow).join("")}</div>
           </div>
         </article>
 
@@ -1600,7 +1455,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
             </div>
           </div>
 
-          <div class="seller-list">
+          <div class="seller-list" id="sellerRestockActions">
             ${
               lowStockProducts.map((product) => `
                 <div>
@@ -1621,6 +1476,16 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       </section>
     `);
 
+    window.GUNPLA_SALES.mount({ container: byId("sellerSales"), products: liveProductsList, receipts: recordedSales, api: API, token: sellerAccount.token,
+      onSaved: (sale) => renderSeller(`Sale ${sale.id} recorded. Sales analytics and inventory have been refreshed.`) });
+
+    window.GUNPLA_REVENUE.mount({ container: byId("sellerRevenue"), receipts: revenueSales, storeId: storeOwner.id, settings: sellerRevenueSettings });
+
+    window.GUNPLA_PREDICTIONS.mount({
+      container: byId("sellerPredictions"), products: liveProductsList,
+      receipts: recordedSales, storeId: storeOwner.id
+    });
+
     byId("sellerOfferForm")?.addEventListener("submit", (event) => {
       event.preventDefault();
 
@@ -1640,10 +1505,13 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     });
 
     document.querySelectorAll(".seller-offer-sale").forEach((button) => {
-      button.addEventListener("click", () => {
+      button.addEventListener("click", async () => {
         const offer = getSellerOffers().find((item) => item.id === button.dataset.id);
         if (!offer) return;
-        recordSellerSale({ ...offer, offerType: "seller-offer" });
+        button.dataset.requestId ||= window.GUNPLA_SALES.requestId();
+        button.disabled = true;
+        try { await recordSellerSale({ ...offer, requestId: button.dataset.requestId }); }
+        catch (error) { byId("sellerSaleStatus").textContent = error.message; button.disabled = false; }
       });
     });
 
@@ -1655,75 +1523,45 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       });
     });
 
-    byId("sellerAddSale")?.addEventListener("click", () => {
-      const product = demandRows.find((item) => item.liveStatus !== "Out of Stock") || products[0];
-      if (!product) return;
-
-      if (product.liveStock > 0 && product.liveStatus !== "Pre-order") {
-        setProductInventory(product.id, product.liveStock - 1, product.liveStatus === "Pre-order" ? "Pre-order" : "");
-      }
-
-      recordSellerSale({
-        id: product.id,
-        name: product.name,
-        category: "Kit",
-        price: product.price,
-        offerType: "product"
+    function bindStockForms() {
+      document.querySelectorAll(".seller-stock-form").forEach((form) => {
+        const input = form.querySelector("input[name=stock]");
+        form.addEventListener("input", () => {
+          form.dataset.dirty = String(Number(input.value) !== Number(form.dataset.currentStock));
+          form.querySelector("[data-stock-reset]").hidden = form.dataset.dirty !== "true";
+        });
+        form.querySelector("[data-stock-reset]").addEventListener("click", () => {
+          input.value = form.dataset.currentStock;
+          form.dataset.dirty = "false";
+          form.querySelector("[data-stock-reset]").hidden = true;
+          form.querySelector(".stock-row-error").hidden = true;
+          activeStockMonitor?.refresh();
+        });
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (form.dataset.saving === "true" || !form.reportValidity()) return;
+          const product = liveProductsList.find((item) => String(item.id) === form.dataset.id);
+          if (!product) return;
+          form.dataset.saving = "true";
+          const errorNode = form.querySelector(".stock-row-error");
+          const buttons = [...form.querySelectorAll("button")];
+          buttons.forEach((button) => { button.disabled = true; });
+          errorNode.hidden = true;
+          try {
+            const response = await fetch(API + "/products/" + encodeURIComponent(product._id), {
+              method: "PUT", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sellerAccount.token },
+              body: JSON.stringify({ stock: Number(input.value), status: product.status === "Pre-order" ? "Pre-order" : "", expectedVersion: product.__v })
+            });
+            const saved = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(saved.message || "Unable to save stock. Please try again.");
+            form.dataset.dirty = "false";
+            form.dataset.saving = "false";
+            byId("sellerSavedNotice").textContent = "Stock saved for " + product.name + ".";
+            await activeStockMonitor?.refresh();
+          } catch (error) { errorNode.textContent = error.message; errorNode.hidden = false; }
+          finally { form.dataset.saving = "false"; buttons.forEach((button) => { button.disabled = false; }); }
+        });
       });
-    });
-
-    byId("sellerResetInventory")?.addEventListener("click", () => {
-      localStorage.removeItem(keys.inventory);
-      renderSeller();
-    });
-
-    document.querySelectorAll(".seller-stock-form").forEach((form) => {
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-
-        const displayId = form.dataset.id; 
-        const input = form.querySelector("input[name='stock']");
-        const updatedStock = Number(input.value);
-        
-        const matchedProduct = (typeof liveProductsList !== "undefined" && liveProductsList.find((item) => String(item.id) === String(displayId)))
-                               || DATA.products.find((item) => String(item.id) === String(displayId));
-
-        const targetUrlId = matchedProduct?._id || displayId;
-
-        try {
-          const response = await fetch(`${API}/products/${targetUrlId}`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${sellerAccount.token}`
-            },
-            body: JSON.stringify({
-              stock: updatedStock,
-              status: matchedProduct?.status === "Pre-order" ? "Pre-order" : ""
-            })
-          });
-
-          if (response.ok) {
-            setProductInventory(displayId, updatedStock, matchedProduct?.status === "Pre-order" ? "Pre-order" : "");
-            alert("Inventory updated and synchronized successfully!");
-            renderSeller();
-          } else {
-            const responseText = await response.text();
-            let serverErrorMessage = responseText;
-            try { 
-              const parsedJson = JSON.parse(responseText); 
-              serverErrorMessage = parsedJson.message || serverErrorMessage;
-            } catch(e) {}
-            
-            alert(`Server rejected update (${response.status}): ${serverErrorMessage}`);
-          }
-        } catch (error) {
-          console.error("Network error communicating with database:", error);
-          alert("Network connection error. Check if your backend node application is online.");
-        }
-      });
-    });
-
     document.querySelectorAll(".seller-view-product").forEach((button) => {
       button.addEventListener("click", () => {
         const product = demandRows.find((item) => item.id === button.dataset.id);
@@ -1737,6 +1575,55 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
         `);
       });
     });
+    }
+    bindStockForms();
+
+    const applyStock = (snapshot) => {
+      const previous = new Map(liveProductsList.map((product) => [String(product._id), product]));
+      const previousIds = [...previous.keys()].sort().join(",");
+      const nextIds = snapshot.map((product) => String(product._id)).sort().join(",");
+      const changed = window.GUNPLA_STOCK_MONITOR.merge(liveProductsList, snapshot);
+      if (!changed && previousIds === nextIds) return 0;
+      liveProductsList.splice(0, liveProductsList.length, ...snapshot.map((product) => Object.assign(previous.get(String(product._id)) || {}, product)));
+      products.splice(0, products.length, ...liveProductsList.map((product) => ({ ...product, liveStock: Number(product.stock), liveStatus: product.status,
+        soldCount: receipts.reduce((sum, receipt) => sum + receipt.lineItems.filter((line) => line.productId === product.id).reduce((units, line) => units + line.quantity, 0), 0) })));
+      demandRows.splice(0, demandRows.length, ...products.map((product) => ({ ...product,
+        demandScore: product.soldCount * 16 + reservations.filter((item) => item.productId === product.id).length * 20 + (product.liveStock <= 5 ? 18 : 0) + (product.liveStatus === "Pre-order" ? 14 : 0)
+      })).sort((a, b) => b.demandScore - a.demandScore));
+      byId("sellerStockRows").innerHTML = demandRows.map(sellerStockRow).join("");
+      bindStockForms();
+      window.GUNPLA_STOCK_MONITOR.summary(byId("sellerStockSnapshot"), products);
+      const low = products.filter((product) => product.liveStock <= 5);
+      byId("sellerStockHealth").textContent = (products.length ? Math.round((products.length - low.length) / products.length * 100) : 0) + "%";
+      byId("sellerLowStockCount").textContent = low.length + " low-stock kits";
+      byId("sellerRestockEstimate").textContent = money(low.reduce((sum, product) => sum + Math.max(0, 12 - product.liveStock) * product.price, 0));
+      byId("sellerTopDemandGrade").textContent = demandRows[0]?.grade || "--";
+      byId("sellerTopDemandName").textContent = demandRows[0]?.name || "No product data yet";
+      byId("sellerRestockActions").innerHTML = low.map((product) => '<div><span class="pill red">Restock</span><b>' + escapeHtml(product.name) + '</b><small>' + escapeHtml(actionFor(product)) + '</small></div>').join("") || '<div class="empty">No urgent restock needed.</div>';
+      const picker = byId("saleProduct");
+      const selected = picker.value;
+      picker.replaceChildren(...liveProductsList.map((product) => new Option(product.name + " (" + product.id + ")", product._id)));
+      if (liveProductsList.some((product) => product._id === selected)) picker.value = selected;
+      picker.disabled = !liveProductsList.length;
+      byId("sellerSaleForm").querySelector("button[type=submit]").disabled = !liveProductsList.length;
+      const chosen = liveProductsList.find((product) => product._id === picker.value);
+      byId("saleStockHint").textContent = chosen ? chosen.stock + " units currently in stock." : "No products in your catalog.";
+      byId("predictionHorizon").dispatchEvent(new Event("change"));
+      return changed || 1;
+    };
+    window.GUNPLA_STOCK_MONITOR.summary(byId("sellerStockSnapshot"), products);
+    activeStockMonitor = window.GUNPLA_STOCK_MONITOR.create({
+      url: API + "/admin/stock", token: sellerAccount.token,
+      canUpdate: () => !document.querySelector('.seller-stock-form[data-dirty="true"], .seller-stock-form[data-saving="true"]')
+        && byId("sellerSaleForm")?.dataset.saving !== "true" && !document.querySelector('.seller-offer-sale:disabled[data-request-id]') && !byId("modal").classList.contains("show"),
+      onData: applyStock,
+      onState: (state) => {
+        byId("sellerStockSync").textContent = window.GUNPLA_STOCK_MONITOR.label(state);
+        byId("sellerStockSync").parentElement.dataset.state = state.status;
+      }
+    });
+    byId("sellerStockRefresh").addEventListener("click", () => activeStockMonitor.refresh());
+    activeStockMonitor.start();
   }
 
   function saveAuthenticatedAccount(data, fallback = {}) {
@@ -1925,6 +1812,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
     points: renderPoints,
     rewards: renderRewards,
     seller: renderSeller,
+    "video-review": renderVideoReview,
     login: renderAuth
   };
 
@@ -1936,6 +1824,35 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       if (["http:", "https:"].includes(url.protocol) && !url.username && !url.password) return url.href;
     } catch { /* Use a placeholder for unsupported photos. */ }
     return "images/product-placeholder.svg";
+  }
+
+  function bindPublicStockMonitoring() {
+    activeStockMonitor = window.GUNPLA_STOCK_MONITOR.create({
+      url: API + "/products/stock",
+      canUpdate: () => !byId("modal").classList.contains("show"),
+      onData: async (snapshot) => {
+        const oldIds = DATA.products.map(window.GUNPLA_STOCK_MONITOR.key).sort().join(",");
+        const newIds = snapshot.map(window.GUNPLA_STOCK_MONITOR.key).sort().join(",");
+        const changed = window.GUNPLA_STOCK_MONITOR.merge(DATA.products, snapshot);
+        if (oldIds !== newIds) {
+          const response = await fetch(API + "/products", { cache: "no-store", signal: AbortSignal.timeout(10000) });
+          if (!response.ok) throw new Error("Unable to refresh the catalog.");
+          DATA.products = await response.json();
+        }
+        if (changed || oldIds !== newIds) {
+          const focused = document.activeElement.closest?.("[data-product-key]")?.dataset.productKey;
+          drawPublicProducts();
+          if (focused) [...document.querySelectorAll("[data-product-key]")].find((card) => card.dataset.productKey === focused)?.querySelector(".reserve-btn")?.focus({ preventScroll: true });
+        }
+        return changed || (oldIds !== newIds ? 1 : 0);
+      },
+      onState: (state) => {
+        byId("publicStockStatus").textContent = window.GUNPLA_STOCK_MONITOR.label(state);
+        byId("publicStockStatus").parentElement.dataset.state = state.status;
+      }
+    });
+    byId("publicStockRefresh").addEventListener("click", () => activeStockMonitor.refresh());
+    activeStockMonitor.start();
   }
 
   async function startPage() {
@@ -1955,6 +1872,7 @@ const API = location.hostname === "localhost" || location.hostname === "127.0.0.
       }
     }
     (pages[page] || renderHome)();
+    if (["home", "discover"].includes(page)) bindPublicStockMonitoring();
   }
 
   document.addEventListener("error", (event) => {

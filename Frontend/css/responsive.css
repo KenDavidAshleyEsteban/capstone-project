@@ -261,10 +261,6 @@
     grid-template-columns: 1fr;
   }
 
-  .background-motion-toggle {
-    right: max(12px, env(safe-area-inset-right));
-    bottom: max(12px, env(safe-area-inset-bottom));
-  }
 }
 
 @media (max-width: 980px) {

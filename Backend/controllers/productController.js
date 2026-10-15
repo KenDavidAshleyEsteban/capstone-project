@@ -44,7 +44,12 @@ async function updateProduct(req, res, next) {
     const identity = mongoose.isObjectIdOrHexString(id) ? { $or: [{ _id: id }, { id }] } : { id };
     const product = await Product.findOne({ ...identity, ...catalogScope(req.catalogOwner) });
     if (!product) return res.status(404).json({ message: 'Product not found in your catalog.' });
-    const data = validateProduct(req.body, product);
+    const { expectedVersion, ...body } = req.body || {};
+    if (expectedVersion !== undefined) {
+      if (!Number.isInteger(expectedVersion) || expectedVersion < 0) return res.status(400).json({ message: 'Invalid product version. Refresh your catalog.' });
+      if (expectedVersion !== product.__v) return res.status(409).json({ message: 'This product changed while you were editing. Refresh its stock before saving again.', field: 'stock' });
+    }
+    const data = validateProduct(body, product);
     await validateStore(data.storeId, req.catalogOwner, product);
     Object.assign(product, data);
     res.json(await product.save());

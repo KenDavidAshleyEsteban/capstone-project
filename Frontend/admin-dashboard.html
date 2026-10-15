@@ -5,18 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Manage your Gunpla Hub products, photos, prices, and inventory.">
   <title>Catalog dashboard | Gunpla Hub</title>
+  <link rel="stylesheet" href="css/base.css">
   <link rel="stylesheet" href="css/admin-dashboard.css">
   <link rel="stylesheet" href="css/logo.css" />
+  <script src="js/stock-monitor.js" defer></script>
   <script src="js/admin-dashboard.js" defer></script>
 </head>
-<body>
+<body class="catalog-page">
   <a class="skip-link" href="#mainContent">Skip to catalog</a>
+  <div class="ambient-bg" aria-hidden="true"></div>
   <aside class="sidebar">
-    <a class="brand" href="index.html" aria-label="Gunpla Hub home"><span class="brand-mark" aria-hidden="true">G<span>H</span></span><span>Gunpla Hub<small>Store workspace</small></span></a>
+    <a class="brand" href="index.html" aria-label="Gunpla Hub home"><b><span>GUNPLA</span> HUB</b><small>Store workspace</small></a>
     <div class="workspace"><span class="workspace-icon" aria-hidden="true">店</span><div><strong id="workspaceName">Catalog management</strong><small id="workspaceRole">Verifying your account…</small></div></div>
     <nav aria-label="Workspace">
       <a href="admin-dashboard.html" class="nav-link active" aria-current="page"><span aria-hidden="true">▦</span> Product catalog</a>
       <a href="seller-dashboard.html" class="nav-link" id="analyticsLink" hidden><span aria-hidden="true">▥</span> Seller analytics</a>
+      <a href="video-review.html" class="nav-link" id="videoReviewLink" hidden><span aria-hidden="true">▷</span> Review build videos</a>
+      <a href="events.html" class="nav-link"><span aria-hidden="true">◇</span> Events &amp; RSVPs</a>
+      <a href="store.html" class="nav-link"><span aria-hidden="true">⌖</span> Store map</a>
       <a href="discover.html" class="nav-link"><span aria-hidden="true">◇</span> Browse storefront</a>
     </nav>
     <div class="sidebar-note"><span class="note-line"></span><strong>Ready for the next build.</strong><p>Keep your kits, photos, and stock up to date for your local builders.</p></div>
@@ -35,6 +41,7 @@
         <article><span>Inventory value</span><strong id="inventoryValue">—</strong><small>At current selling prices</small></article>
       </section>
 
+      <div class="stock-monitor-bar"><p id="catalogStockStatus" role="status">Stock monitoring starts after your catalog loads.</p><button type="button" class="button secondary" id="catalogStockRefresh">Check stock now</button></div>
       <section class="catalog-panel" aria-labelledby="catalogTitle">
         <div class="catalog-heading"><div><h2 id="catalogTitle">Product catalog <span id="productCount" class="count">0</span></h2><p>Every kit. Every detail. All in one place.</p></div><button id="refreshBtn" class="button secondary" type="button">↻ <span>Refresh</span></button></div>
         <div class="catalog-tools">

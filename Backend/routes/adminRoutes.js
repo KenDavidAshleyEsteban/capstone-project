@@ -5,6 +5,13 @@ const Product = require('../models/Product');
 const User = require('../models/User');
 const { catalogScope } = require('../controllers/productController');
 
+router.get('/stock', auth, catalogOwner, async (req, res, next) => {
+  try {
+    const products = await Product.find(catalogScope(req.catalogOwner)).select('_id id name grade skill price stock status storeId updatedAt __v').lean();
+    res.set('Cache-Control', 'no-store').json({ products, checkedAt: new Date().toISOString() });
+  } catch (error) { next(error); }
+});
+
 router.get('/dashboard', auth, catalogOwner, async (req, res, next) => {
   try {
     const user = req.catalogOwner;

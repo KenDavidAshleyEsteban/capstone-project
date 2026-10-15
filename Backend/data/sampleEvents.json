@@ -1,0 +1,93 @@
+[
+  {
+    "id": "event-build-night",
+    "title": "Friday Build Night",
+    "type": "Community",
+    "status": "sample",
+    "description": "Bring your kit and build with fellow hobbyists. Workspace and basic tool availability will be confirmed by the organizer.",
+    "date": null,
+    "startTime": null,
+    "endTime": null,
+    "venue": "Baguio Gunpla Station",
+    "address": null,
+    "fee": null,
+    "capacity": null,
+    "audience": null,
+    "registrationDeadline": null,
+    "registrationUrl": null,
+    "organizer": null,
+    "contactEmail": null,
+    "contactPhone": null,
+    "agenda": [
+      "Community kit-building session",
+      "Meet fellow builders and share build progress"
+    ],
+    "bring": [
+      "Your current kit or work in progress"
+    ],
+    "included": [],
+    "accessibility": null,
+    "rules": null,
+    "cancellationPolicy": null
+  },
+  {
+    "id": "event-panel",
+    "title": "Beginner Panel Lining Workshop",
+    "type": "Workshop",
+    "status": "sample",
+    "description": "Learn panel lining, nub cleanup, and safe tool handling for cleaner builds.",
+    "date": null,
+    "startTime": null,
+    "endTime": null,
+    "venue": "Mecha Corner Baguio",
+    "address": null,
+    "fee": null,
+    "capacity": null,
+    "audience": null,
+    "registrationDeadline": null,
+    "registrationUrl": null,
+    "organizer": null,
+    "contactEmail": null,
+    "contactPhone": null,
+    "agenda": [
+      "Safe tool handling",
+      "Nub cleanup",
+      "Panel lining techniques"
+    ],
+    "bring": [],
+    "included": [],
+    "accessibility": null,
+    "rules": null,
+    "cancellationPolicy": null
+  },
+  {
+    "id": "event-showcase",
+    "title": "Local Gunpla Showcase",
+    "type": "Competition",
+    "status": "sample",
+    "description": "Display custom kits, vote for community favorites, and meet local builders.",
+    "date": null,
+    "startTime": null,
+    "endTime": null,
+    "venue": "North Build Station",
+    "address": null,
+    "fee": null,
+    "capacity": null,
+    "audience": null,
+    "registrationDeadline": null,
+    "registrationUrl": null,
+    "organizer": null,
+    "contactEmail": null,
+    "contactPhone": null,
+    "agenda": [
+      "Custom kit display",
+      "Community favorite voting",
+      "Meet local builders"
+    ],
+    "bring": [],
+    "included": [],
+    "accessibility": null,
+    "rules": null,
+    "cancellationPolicy": null
+  }
+]

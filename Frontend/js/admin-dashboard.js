@@ -4,7 +4,7 @@
   const $ = (id) => document.getElementById(id);
   const ACCOUNT_KEY = 'gunpla.account.v1';
   const PLACEHOLDER = 'images/product-placeholder.svg';
-  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["5500", "5501"].includes(location.port) ? "http://localhost:5000/api" : "https://capstone-project-35cd.onrender.com/api");
+  const API = window.GUNPLA_API_URL || (location.protocol === "file:" || ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname) ? "http://localhost:5000/api" : "https://capstone-project-35cd.onrender.com/api");
   const money = (value) => new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value);
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   let account;
@@ -22,6 +22,8 @@
   let photoLoading = false;
   let photoGeneration = 0;
   let toastTimer;
+  let loadingDashboard = false;
+  let stockMonitor;
 
   function safeImage(value) {
     if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+=*$/.test(value || '')) return value;
@@ -121,7 +123,35 @@
     $('nextPage').disabled = page >= totalPages;
   }
 
+  function startStockMonitoring() {
+    if (stockMonitor || !user) return;
+    stockMonitor = window.GUNPLA_STOCK_MONITOR.create({
+      url: `${API}/admin/stock`, token,
+      canUpdate: () => !loadingDashboard && !saving && !$('productDialog').open,
+      onData: async (snapshot) => {
+        const currentIds = products.map((product) => String(product._id)).sort().join(',');
+        const nextIds = snapshot.map((product) => String(product._id)).sort().join(',');
+        if (currentIds !== nextIds) { await loadDashboard(); return snapshot.length; }
+        const changed = window.GUNPLA_STOCK_MONITOR.merge(products, snapshot);
+        if (changed) { renderStats(); renderProducts(); }
+        return changed;
+      },
+      onState: (state) => {
+        $('catalogStockStatus').textContent = window.GUNPLA_STOCK_MONITOR.label(state);
+        $('catalogStockStatus').parentElement.dataset.state = state.status;
+        if (state.status === 'auth') {
+          user = null;
+          $('addProductBtn').disabled = true;
+          pageError('Your session expired. Sign in again to continue managing products.', true);
+        }
+      }
+    });
+    stockMonitor.start();
+  }
+
   async function loadDashboard() {
+    if (loadingDashboard) return;
+    loadingDashboard = true;
     $('pageError').hidden = true;
     $('refreshBtn').disabled = true;
     $('addProductBtn').disabled = true;
@@ -140,6 +170,7 @@
       $('accountRole').textContent = user.role === 'admin' ? 'Administrator' : 'Store owner';
       $('avatar').textContent = user.username.slice(0, 2).toUpperCase();
       $('analyticsLink').hidden = user.role !== 'seller';
+      $('videoReviewLink').hidden = user.role !== 'admin';
       $('catalogScope').textContent = user.role === 'admin' ? `Across all stores · ${data.stats.totalUsers} accounts` : (user.storeName || 'Your store');
       $('dashboardIntro').textContent = user.role === 'admin' ? 'Manage products, photos, and inventory across your store community.' : `Manage products, photos, and inventory for ${user.storeName || 'your store'}.`;
       document.title = `${user.role === 'admin' ? 'Admin' : 'Store'} dashboard | Gunpla Hub`;
@@ -154,9 +185,11 @@
       connection(authError ? 'Sign-in required' : 'Connection unavailable', 'failed');
       $('resultsSummary').textContent = 'Catalog could not be loaded';
     } finally {
+      loadingDashboard = false;
       $('catalogLoading').hidden = true;
       $('refreshBtn').disabled = false;
     }
+    if (user) startStockMonitoring();
   }
 
   function resetFilters() {
@@ -201,6 +234,7 @@
     photoLoading = false;
     dirty = false;
     $('productDialog').showModal();
+    stockMonitor?.refresh();
     $('productName').focus();
     $('productDialog').scrollTop = 0;
   }
@@ -211,6 +245,7 @@
     photoGeneration++;
     dirty = false;
     $('productDialog').close();
+    stockMonitor?.refresh();
   }
 
   async function uploadPhoto(file) {
@@ -260,6 +295,7 @@
       status: $('productStatus').value, image: url || photo,
       description: $('productDescription').value.trim(), storeId: $('productStore').value
     };
+    if (editing && Number.isInteger(editing.__v)) payload.expectedVersion = editing.__v;
     if ($('productSku').value.trim()) payload.id = $('productSku').value.trim();
     if (!payload.name) return showFormError({ message: 'Enter a product name.', field: 'name' });
     saving = true;
@@ -291,6 +327,7 @@
       saving = false;
       controls.forEach((control) => { control.disabled = false; });
       $('saveProduct').textContent = editing ? 'Save changes' : 'Add product';
+      if (!$('productDialog').open) stockMonitor?.refresh();
     }
   }
 
@@ -302,6 +339,7 @@
   $('addProductBtn').addEventListener('click', () => openEditor());
   $('emptyAddBtn').addEventListener('click', () => openEditor());
   $('refreshBtn').addEventListener('click', loadDashboard);
+  $('catalogStockRefresh').addEventListener('click', () => stockMonitor?.refresh());
   $('retryBtn').addEventListener('click', loadDashboard);
   $('clearFiltersBtn').addEventListener('click', () => { resetFilters(); renderProducts(); });
   ['productSearch', 'gradeFilter', 'statusFilter'].forEach((id) => $(id).addEventListener('input', () => { page = 1; if (user) renderProducts(); }));

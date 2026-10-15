@@ -8,6 +8,9 @@ app.use(express.json({ limit: '3mb' }));
 app.use('/api/products', require('./routes/productRoutes'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/sales', require('./routes/saleRoutes'));
+app.use('/api/build-videos', require('./routes/buildVideoRoutes'));
+app.use('/api/events', require('./routes/eventRoutes'));
 app.use('/api', (req, res) => res.status(404).json({ message: 'API route not found.' }));
 app.use(express.static(path.join(__dirname, '../Frontend')));
 
