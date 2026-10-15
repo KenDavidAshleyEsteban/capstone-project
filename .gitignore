@@ -3,6 +3,10 @@ node_modules/
 .tmp/
 .pnpm-store/
 
+# local agent skills
+/.agents/skills/
+/skills-lock.json
+
 # environment variables
 .env
 
