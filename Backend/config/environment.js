@@ -13,27 +13,42 @@ function configuredUrl(name, env) {
 function emailConfig(env = process.env) {
   const backend = configuredUrl('BACKEND_URL', env);
   const frontend = configuredUrl('FRONTEND_URL', env);
-  if (!['file', 'resend'].includes(env.EMAIL_MODE)) throw new Error('Set EMAIL_MODE to file for local development or resend for delivery.');
+
+  if (!['file', 'resend', 'brevo'].includes(env.EMAIL_MODE)) {
+    throw new Error('Set EMAIL_MODE to file for local development, resend, or brevo for delivery.');
+  }
+
   if (env.EMAIL_MODE === 'file') {
     const loopback = (url) => ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
     if (env.NODE_ENV === 'production' || !loopback(backend) || !loopback(frontend)) {
       throw new Error('EMAIL_MODE=file is allowed only for local development with loopback BACKEND_URL and FRONTEND_URL.');
     }
-  } else if (!env.RESEND_API_KEY || !env.EMAIL_FROM || !/^[^<>\r\n]*<?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(env.EMAIL_FROM)) {
-    throw new Error('EMAIL_MODE=resend requires RESEND_API_KEY and a valid EMAIL_FROM sender.');
+  } else if (env.EMAIL_MODE === 'resend') {
+    if (!env.RESEND_API_KEY || !env.EMAIL_FROM || !/^[^<>\r\n]*<?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(env.EMAIL_FROM)) {
+      throw new Error('EMAIL_MODE=resend requires RESEND_API_KEY and a valid EMAIL_FROM sender.');
+    }
+  } 
+  else if (env.EMAIL_MODE === 'brevo') {
+    if (!env.BREVO_SMTP_USER || !env.BREVO_SMTP_KEY || !env.EMAIL_FROM || !/^[^<>\r\n]*<?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(env.EMAIL_FROM)) {
+      throw new Error('EMAIL_MODE=brevo requires BREVO_SMTP_USER, BREVO_SMTP_KEY, and a valid EMAIL_FROM sender.');
+    }
   }
+
   const outboxDir = env.EMAIL_OUTBOX_DIR ? path.resolve(__dirname, '..', env.EMAIL_OUTBOX_DIR) : path.resolve(__dirname, '../../.tmp/email-outbox');
   const relativeToPublic = path.relative(path.resolve(__dirname, '../../Frontend'), outboxDir);
   if (env.EMAIL_MODE === 'file' && (relativeToPublic === '' || (!relativeToPublic.startsWith(`..${path.sep}`) && !path.isAbsolute(relativeToPublic)))) {
     throw new Error('EMAIL_OUTBOX_DIR must be outside the public Frontend directory.');
   }
+
   return {
     mode: env.EMAIL_MODE,
     backendUrl: backend.href.replace(/\/$/, ''),
     frontendUrl: frontend.href.replace(/\/$/, ''),
     outboxDir,
     apiKey: env.RESEND_API_KEY,
-    from: env.EMAIL_FROM
+    from: env.EMAIL_FROM,
+    brevoUser: env.BREVO_SMTP_USER,
+    brevoKey: env.BREVO_SMTP_KEY
   };
 }
 
