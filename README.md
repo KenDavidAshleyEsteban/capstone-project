@@ -4,13 +4,19 @@ Store owners and admins can manage products at `/admin-dashboard.html`. The cata
 
 ## Run locally
 
-1. Install Node.js 20.19 or newer and have a local MongoDB instance or MongoDB Atlas connection ready.
+1. Install Node.js 20.19 or newer and have MongoDB Atlas or a local MongoDB replica set ready. Reservations, stock deductions, points, and redemptions use transactions and require a replica set.
 2. In `Backend`, run `npm ci`.
-3. Copy `Backend/.env.example` to `Backend/.env`. Set `MONGODB_URI` and a long random `JWT_SECRET`.
+3. Copy `Backend/.env.example` to `Backend/.env`. Set `MONGODB_URI` and a long random `JWT_SECRET`. Keep the supplied local `EMAIL_MODE=file`, `BACKEND_URL=http://127.0.0.1:5000`, and `FRONTEND_URL=http://127.0.0.1:5000` settings for local development.
 4. Run `npm start` from `Backend`.
-5. Open `http://localhost:5000/login.html`. Register a seller account with a store name and location, or sign in with an existing admin. Both roles can open the product dashboard after login.
+5. Open `http://127.0.0.1:5000/login.html`. Register a buyer or seller, open the verification link from the newest matching message in `.tmp/email-outbox/*.json`, then log in. File mode saves private development messages without sending email. Sellers provide a store name and location and can open the product dashboard after verification.
 
 To create the first admin, set `ADMIN_EMAIL`, `ADMIN_USERNAME`, and a strong `ADMIN_PASSWORD` in `.env`, then run `npm run seed:admin`. This does not replace an existing admin or reset its password. Remove the seeding password from `.env` afterward. The old seed script included a database credential in source control; rotate that credential if it is still active.
+
+Login only authenticates existing verified accounts. Public registration cannot create admins, and login never creates one from environment credentials. New accounts require a valid email, a username of 2–80 characters, and a password of at least 8 characters and at most 72 UTF-8 bytes. Admin seeding requires at least 12 characters within the same byte limit.
+
+For actual email delivery, set `EMAIL_MODE=resend`, `RESEND_API_KEY`, and `EMAIL_FROM` using a verified sender domain. Set `BACKEND_URL` to the API origin and `FRONTEND_URL` to the frontend origin for that environment; production requires HTTPS and disallows file mode. Startup reports missing settings before importing the application. `EMAIL_OUTBOX_DIR` is optional, relative to `Backend`, and must stay outside the public `Frontend` directory.
+
+Verification links expire after 24 hours. Login and registration offer **Resend verification email** for pending accounts, expired links, and delivery failures. Successful sends have a 60-second resend cooldown. A rejected provider response returns HTTP 503 and leaves the account recoverable immediately through resend. Old verification links issued before the hashed-token upgrade must be replaced through resend. Existing unverified admin accounts also need email verification; seeding preserves existing credentials.
 
 The backend serves the frontend and API together. VS Code Live Server on ports 5500/5501 is also supported with the API running on port 5000. For a different API host, set `window.GUNPLA_API_URL` before loading the frontend scripts.
 
@@ -23,7 +29,17 @@ All frontend pages share `Frontend/images/Wallpaper23.jpg` as their background t
 - SKU values are unique. Leave the SKU blank for a new product to generate one automatically.
 - Stock must be a nonnegative whole number. Automatic availability is out of stock at 0 units, low stock at 1–5, and available at 6+. Pre-order and Restock Soon can be selected explicitly.
 - Upload JPG, PNG, or WebP files up to 2 MB. Uploaded photos are stored as data URLs in the product document, so details and photos save together without a separate file-storage service. Photo URLs are also supported. Removing a photo replaces it with a placeholder.
-- Sales and product inventory are database-backed. Buyer reservations, rewards, QR point claims, and offer availability still use browser demo data; they are not imported as completed sales.
+- Products, sales, buyer reservations, receipts, QR point claims, points, and reward redemptions are database-backed. Seller offer availability remains a per-account browser convenience and is not a buyer receipt or source of loyalty points.
+
+## Buyer reservations, receipts, and rewards
+
+Buyers reserve a catalog kit for in-store pickup. Reserving holds stock atomically and saves the quoted price, but creates no receipt or points. The buyer or owning store can cancel to return stock once. In **Seller dashboard → Buyer reservations**, the owning seller completes pickup after the purchase is settled in store; this creates one completed sale and a receipt for the buyer without deducting stock again. No online payment provider is integrated.
+
+On **Receipts**, buyers can view their completed purchase QR or claim its points directly. **Scan QR** supports camera access, uploaded QR images, and manually pasted receipt tokens. The backend signs receipt tokens, checks account ownership, and awards `floor(purchase amount / PHP10)` points once. Camera access needs HTTPS or localhost. QR encoding and decoding use bundled libraries; scanners do not depend on a CDN.
+
+The **Points** and **Rewards** pages load the current account's persisted wallet and activity. Reward costs come from the backend; transactions prevent simultaneous claims or redemptions from double-awarding or overspending. A redemption saves a pickup code and status. The four configured rewards are defined in `Backend/utils/rewardCatalog.js`; store fulfillment is arranged directly with the listed store. Manual walk-in seller sales have no buyer attribution and therefore do not generate claimable buyer points.
+
+Signing out or switching accounts clears visible buyer state. Legacy browser demo receipts, reservations, balances, and rewards are discarded and never imported as real purchases. Seller offers use account-specific browser keys.
 
 ## Automatic stock monitoring
 
@@ -47,7 +63,7 @@ Forecasts use only the signed-in store's completed database receipts with a matc
 
 ## Visual beginner guide
 
-The guide includes a proportional scale comparison, an interactive six-grade explorer, and illustrated clipping/cleanup steps. Heights use an explicitly labeled 18 m reference mobile suit rather than claiming every kit has the same size. The SVG diagrams and controls use the existing theme, support small screens and keyboard interaction, and link to BANDAI's grade overview and building instructions.
+The guide uses the supplied grade photos in equally sized frames, an interactive six-grade explorer, and illustrated clipping/cleanup steps. The scale comparison uses the supplied Entry Grade Nu, Master Grade ZZ, and Perfect Grade Nu photos with approximate model-specific body heights and a separate funnel-height note. The diagrams and controls support small screens and keyboard interaction and link to BANDAI's grade overview and building instructions.
 
 ## Community event details
 
@@ -71,4 +87,16 @@ Restart the backend after pulling these changes: `server.js` now runs the same E
 
 The public Stores page (`/store.html`) includes a searchable Leaflet map with OpenStreetMap tiles, shop-area popups, Google Maps directions, and nearby Street View links. Search filters the cards and pins together; **Show all stores** clears the search and resets the map. Baguio Gundams Hobby Shop is listed at Stall 2|2, Maharlika Bldg., Baguio City; its pin and navigation links use the Maharlika Livelihood Complex building location. The coordinates in `Frontend/js/data.js` are approximate building/street/neighborhood centers looked up with OpenStreetMap/Nominatim, not verified storefront entrances. The optional `mapLocation` field supplies a searchable building address while `location` keeps the full displayed stall address. Leaflet 1.9.4, its CSS, marker images, and BSD license are bundled in `Frontend/vendor/leaflet`, so the library does not depend on a CDN or API key. Map tiles require internet access and show OpenStreetMap attribution; map and directions links remain usable if tiles cannot load. Street View opens Google Maps and depends on nearby imagery coverage. See the [Leaflet setup guide](https://leafletjs.com/examples/quick-start/), [OpenStreetMap tile policy](https://operations.osmfoundation.org/policies/tiles/), and [Google Maps URL documentation](https://developers.google.com/maps/documentation/urls/get-started).
 
-Run `npm test` in `Backend` for product validation, revenue grouping, forecast calculation, RSVP time boundaries, and stock-monitor lifecycle tests. To run database integration tests too, set `TEST_MONGODB_URI` to a disposable MongoDB replica set. These tests create uniquely named `gunpla_catalog_test_*`, `gunpla_workflow_test_*`, and `gunpla_events_test_*` databases and delete only those test databases when finished. Integration coverage includes product persistence and permissions, sale retries and concurrent overselling, store-specific analytics data, event validation and admin permissions, RSVP persistence/retries/cancellation, simultaneous seat limits, deadlines, attendee privacy, upload validation, private previews, approval/rejection, review history, byte-range playback, and video withdrawal. Email delivery is stubbed during tests.
+Run these commands from `Backend`:
+
+```sh
+npm test
+npm run test:integration
+npm run test:browser
+```
+
+`npm test` runs fast checks and skips database groups unless `TEST_MONGODB_URI` is explicitly set to a disposable replica set. `test:integration` creates and stops its own temporary MongoDB replica set and runs every test without using the application `MONGODB_URI` or an inherited `TEST_MONGODB_URI`. The first run downloads MongoDB 7.0.24 into ignored `.tmp/mongodb-binaries`; set `MONGOMS_SYSTEM_BINARY` to a compatible existing executable when downloading is unavailable. Test databases have unique `gunpla_*_test_*` names and are dropped after the tests.
+
+Integration coverage includes authentication and verification recovery, inventory and seller permissions, sale/reservation retries and overselling, receipt privacy, concurrent QR claims and reward redemptions, revenue history, events/RSVP capacity and ownership, and moderated video upload/review/playback. Email uses private file output; the provider-rejection case uses a simulated external response and sends nothing.
+
+`test:browser` also owns a temporary replica set, starts the real Express app, and opens an isolated headless Chromium profile. It verifies real registration and email links, browser logins, buyer reservation, seller pickup completion, a displayed QR uploaded into the scanner, points, reward redemption, and buyer switching with poisoned legacy browser data. It checks buyer pages at 1440, 390, and 320 px and saves evidence under `.tmp/browser-workflows`. Edge/Chrome/Chromium is detected automatically; set `BROWSER_PATH` if installed elsewhere. A physical camera and live email-provider delivery require separate environment-specific checks.

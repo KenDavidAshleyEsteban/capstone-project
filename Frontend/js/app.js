@@ -40,6 +40,11 @@
   let navOutsideCloseBound = false;
   let activeStockMonitor;
   let drawPublicProducts;
+  let buyerSnapshot = null;
+  let stopScanner = () => {};
+  let receiptQrUrl = null;
+  let modalRevision = 0;
+  const reservationRequests = new Map();
   const sellerRevenueSettings = { period: "daily", days: 28 };
 
   function normalizeAccountRole(role) {
@@ -91,6 +96,7 @@
     if (!role || !token) return null;
 
     return {
+      id: String(decoded?.id || saved?.id || ""),
       email: saved?.email || decoded?.email || "",
       username: saved?.username || "",
       storeName: saved?.storeName || "",
@@ -111,6 +117,8 @@
   }
 
   function signOut() {
+    clearBuyerState();
+    app.replaceChildren();
     localStorage.removeItem(keys.account);
     localStorage.removeItem("token");
     window.location.href = "login.html";
@@ -127,18 +135,35 @@
   }
 
   function getReceipts() {
-    const saved = read(keys.receipts, null);
-    if (saved) return saved;
-    write(keys.receipts, DATA.seedReceipts);
-    return [...DATA.seedReceipts];
+    return buyerSnapshot?.accountId === currentAccount()?.id ? buyerSnapshot.receipts || [] : [];
   }
 
   function getTransactions() {
-    return read(keys.transactions, []);
+    return buyerSnapshot?.accountId === currentAccount()?.id ? buyerSnapshot.transactions || [] : [];
   }
 
   function getRedemptions() {
-    return read(keys.redemptions, []);
+    return buyerSnapshot?.accountId === currentAccount()?.id ? buyerSnapshot.redemptions || [] : [];
+  }
+
+  function clearBuyerState() {
+    buyerSnapshot = null;
+    reservationRequests.clear();
+    stopScanner();
+    // Old demo data is never migrated into a real account.
+    [keys.receipts, keys.transactions, keys.redemptions, keys.reservations].forEach((key) => localStorage.removeItem(key));
+  }
+
+  function buyerClient() {
+    return window.GUNPLA_BUYER.create({ api: API, account: currentAccount(), getAccount: currentAccount });
+  }
+
+  async function loadBuyerSummary() {
+    buyerSnapshot = null;
+    const summary = await buyerClient().summary();
+    if (summary.accountId !== currentAccount()?.id) throw new Error("Account changed. Sign in again.");
+    buyerSnapshot = summary;
+    return summary;
   }
 
   const defaultSellerOffers = [
@@ -181,21 +206,17 @@
   ];
 
   function getSellerOffers() {
-    return read(keys.sellerOffers, defaultSellerOffers);
+    const id = currentAccount()?.id;
+    return id ? read(`${keys.sellerOffers}:${id}`, defaultSellerOffers) : [];
   }
 
   function setSellerOffers(offers) {
-    write(keys.sellerOffers, offers);
-  }
-
-  function claimedIds() {
-    return getTransactions().filter((item) => item.type === "claim").map((item) => item.receiptId);
+    const id = currentAccount()?.id;
+    if (id) write(`${keys.sellerOffers}:${id}`, offers);
   }
 
   function pointsBalance() {
-    const earned = getTransactions().reduce((sum, item) => sum + Number(item.points || 0), 0);
-    const spent = getRedemptions().reduce((sum, item) => sum + Number(item.cost || 0), 0);
-    return Math.max(0, earned - spent);
+    return buyerSnapshot?.accountId === currentAccount()?.id ? Number(buyerSnapshot.balance || 0) : 0;
   }
 
   function navItem(id, label, href, role = "") {
@@ -264,6 +285,9 @@
   }
 
   function shell(content) {
+    modalRevision += 1;
+    stopScanner();
+    if (receiptQrUrl) { URL.revokeObjectURL(receiptQrUrl); receiptQrUrl = null; }
     activeStockMonitor?.stop();
     activeStockMonitor = null;
     app.innerHTML = `
@@ -329,12 +353,16 @@
   }
 
   function openModal(html) {
+    modalRevision += 1;
     byId("modalBody").innerHTML = html;
     byId("modal").classList.add("show");
     byId("modal").setAttribute("aria-hidden", "false");
+    return modalRevision;
   }
 
   function closeModal() {
+    modalRevision += 1;
+    if (receiptQrUrl) { URL.revokeObjectURL(receiptQrUrl); receiptQrUrl = null; }
     byId("modal")?.classList.remove("show");
     byId("modal")?.setAttribute("aria-hidden", "true");
   }
@@ -471,43 +499,6 @@
     write(keys.inventory, overrides);
   }
 
-  function getSellerReservations() {
-    const saved = read(keys.reservations, null);
-    if (saved) return saved;
-
-    return getReceipts().slice(0, 4).map((receipt, index) => ({
-      id: `RSV-DEMO-${index + 1}`,
-      receiptId: receipt.id,
-      productId: DATA.products[index % DATA.products.length].id,
-      productName: receipt.items.split(",")[0],
-      store: receipt.store,
-      customer: ["Jared Dela Cruz", "Alex Builder", "Mika Runner", "Demo Buyer"][index % 4],
-      status: index === 2 ? "Pre-order" : "For Pickup",
-      amount: receipt.amount,
-      date: receipt.date
-    }));
-  }
-
-  function createReservationRecord(product, receipt) {
-    const store = DATA.stores.find((item) => item.id === product.storeId);
-    const reservations = read(keys.reservations, []);
-
-    reservations.unshift({
-      id: `RSV-${receipt.id.replace("GH-", "")}`,
-      receiptId: receipt.id,
-      productId: product.id,
-      productName: product.name,
-      store: store?.name || receipt.store,
-      storeId: product.storeId,
-      customer: "Demo Builder",
-      status: getProductStatus(product) === "Pre-order" ? "Pre-order" : "For Pickup",
-      amount: receipt.amount,
-      date: receipt.date
-    });
-
-    write(keys.reservations, reservations);
-  }
-
   function statusClass(status) {
     if (status === "Available") return "green";
     if (status === "Pre-order" || status === "Low Stock" || status === "Restock Soon") return "yellow";
@@ -547,58 +538,34 @@
     `;
   }
 
-  function claimReceipt(receiptId) {
+  async function claimReceipt(receiptId, button) {
     if (!requireActionAccess(["buyer"], "claim points")) return;
-
     const receipt = getReceipts().find((item) => item.id === receiptId);
-    if (!receipt) return;
-
-    if (claimedIds().includes(receipt.id)) {
-      openModal(`<h2>Already claimed</h2><p>This receipt was already used. Points cannot be claimed twice.</p>`);
-      return;
-    }
-
-    const transactions = getTransactions();
-    transactions.unshift({
-      id: `TX-${Date.now()}`,
-      type: "claim",
-      receiptId: receipt.id,
-      store: receipt.store,
-      points: receipt.points,
-      date: new Date().toISOString()
-    });
-    write(keys.transactions, transactions);
-    openModal(`<h2>Points claimed</h2><p>You earned <b>${receipt.points} points</b> from receipt ${receipt.id}.</p><a class="primary-btn" href="points.html">View points</a>`);
+    if (!receipt?.qrToken || receipt.claimed) return;
+    if (button) button.disabled = true;
+    try {
+      const result = await buyerClient().claim(receipt.qrToken, window.GUNPLA_BUYER.requestId());
+      await renderReceipts();
+      openModal(`<h2>Points claimed</h2><p>${escapeHtml(result.receipt.points)} points added. Your balance is ${escapeHtml(result.balance)} points.</p><a class="primary-btn" href="points.html">View points</a>`);
+    } catch (error) {
+      if (error.code !== "ACCOUNT_CHANGED") openModal(`<h2>Unable to claim receipt</h2><p>${escapeHtml(error.message)}</p>`);
+    } finally { if (button?.isConnected) button.disabled = false; }
   }
 
-  function addReceipt(product) {
+  async function reserveProduct(product, button) {
     if (!requireActionAccess(["buyer"], "reserve kits")) return;
-
-    const store = DATA.stores.find((item) => item.id === product.storeId);
-    const receipt = {
-      id: `GH-${Math.floor(100000 + Math.random() * 900000)}`,
-      store: store?.name || "Gunpla Hub Partner",
-      amount: product.price,
-      points: Math.floor(product.price / 10),
-      items: product.name,
-      date: new Date().toISOString().slice(0, 10)
-    };
-    const receipts = getReceipts();
-    receipts.unshift(receipt);
-    write(keys.receipts, receipts);
-
-    createReservationRecord(product, receipt);
-
-    const currentStock = getProductStock(product);
-    if (currentStock > 0 && getProductStatus(product) !== "Pre-order") {
-      setProductInventory(product.id, currentStock - 1);
-    }
-
-    openModal(`
-      <h2>Reservation created</h2>
-      <p>Your digital receipt <b>${receipt.id}</b> is ready. You may claim ${receipt.points} points from the Receipts page.</p>
-      <a class="primary-btn" href="receipts.html">Open receipts</a>
-    `);
+    button.disabled = true;
+    const requestKey = `${currentAccount().id}:${product._id || product.id}`;
+    if (!reservationRequests.has(requestKey)) reservationRequests.set(requestKey, window.GUNPLA_BUYER.requestId());
+    try {
+      const result = await buyerClient().reserve(product._id || product.id, reservationRequests.get(requestKey));
+      reservationRequests.delete(requestKey);
+      openModal(`<h2>Reservation created</h2><p>${escapeHtml(result.reservation?.name || product.name)} is reserved for pickup. A receipt becomes available after the store confirms your completed purchase.</p><a class="primary-btn" href="receipts.html">View reservations</a>`);
+      activeStockMonitor?.refresh();
+    } catch (error) {
+      if (error.status && error.status < 500) reservationRequests.delete(requestKey);
+      if (error.code !== "ACCOUNT_CHANGED") openModal(`<h2>Unable to reserve kit</h2><p>${escapeHtml(error.message)}</p>`);
+    } finally { if (button.isConnected) button.disabled = false; }
   }
 
   async function recordSellerSale(item) {
@@ -619,7 +586,7 @@
     document.querySelectorAll(".reserve-btn").forEach((button) => {
       button.addEventListener("click", () => {
         const product = DATA.products.find((item) => item.id === button.dataset.id);
-        if (product) addReceipt(product);
+        if (product) reserveProduct(product, button);
       });
     });
   }
@@ -978,83 +945,237 @@
       requireRsvpAccess: () => requireActionAccess(["buyer", "seller"], "RSVP to an event") });
   }
 
-  function renderReceipts() {
+  async function renderReceipts() {
     if (!requirePageAccess(["buyer"])) return;
-
-    shell(`
-      ${titleBlock("Digital receipts", "Claim points with one-time receipt records", "Receipts create a clear transaction trail for buyers and useful demand signals for sellers.")}
-      <section class="toolbar"><input id="receiptSearch" placeholder="Search receipt or store"><select id="receiptFilter"><option value="all">All receipts</option><option value="ready">Ready</option><option value="claimed">Claimed</option></select><button class="primary-btn" id="sampleReceipt">Create sample</button></section>
-      <section class="receipt-list" id="receipts"></section>
-    `);
+    shell(`${titleBlock("Your purchases", "Reservations and digital receipts", "Track pickup reservations. Completed purchases receive a receipt with a one-time points claim.")}<div id="buyerLoading" class="empty" role="status">Loading your purchases…</div>`);
+    let summary;
+    try { summary = await loadBuyerSummary(); }
+    catch (error) { showBuyerLoadError(error, renderReceipts); return; }
+    byId("buyerLoading").outerHTML = `
+      <section class="buyer-reservations" aria-labelledby="reservationsTitle"><h2 id="reservationsTitle">Your reservations</h2><div class="receipt-list">${summary.reservations.map((item) => `<article class="receipt-card reservation-card"><div><span class="pill">${escapeHtml(item.status)}</span><h3>${escapeHtml(item.name)}</h3><p>${escapeHtml(item.store)} · ${money(item.amount)} · ${item.quantity} item(s)</p><small>${escapeHtml(item.id)} · ${new Date(item.createdAt).toLocaleDateString()}</small></div>${item.status === "Reserved" ? `<button class="ghost-btn cancel-reservation" data-id="${escapeHtml(item.id)}" type="button">Cancel reservation</button>` : ""}</article>`).join("") || `<div class="empty">No reservations yet. <a href="discover.html">Discover kits</a></div>`}</div></section>
+      <h2>Completed purchase receipts</h2>
+      <section class="toolbar"><input id="receiptSearch" aria-label="Search receipts" placeholder="Search receipt or store"><select id="receiptFilter" aria-label="Filter receipts"><option value="all">All receipts</option><option value="ready">Ready</option><option value="claimed">Claimed</option></select></section>
+      <section class="receipt-list" id="receipts"></section>`;
 
     const draw = () => {
       const query = byId("receiptSearch").value.toLowerCase();
       const filter = byId("receiptFilter").value;
-      const claimed = claimedIds();
       const items = getReceipts().filter((receipt) => {
-        const status = claimed.includes(receipt.id) ? "claimed" : "ready";
+        const status = receipt.claimed ? "claimed" : "ready";
         return `${receipt.id} ${receipt.store} ${receipt.items}`.toLowerCase().includes(query) && (filter === "all" || filter === status);
       });
       byId("receipts").innerHTML = items.map((receipt) => {
-        const isClaimed = claimed.includes(receipt.id);
+        const isClaimed = receipt.claimed;
         return `<article class="receipt-card"><div class="receipt-icon">QR</div><div><span class="pill ${isClaimed ? "" : "green"}">${isClaimed ? "Claimed" : "Ready"}</span>      <h3>${escapeHtml(receipt.id)}</h3><p>${escapeHtml(receipt.store)} · ${escapeHtml(receipt.items)}</p><small>${escapeHtml(receipt.date)} · ${money(receipt.amount)} · ${receipt.points} pts</small></div><div class="button-stack"><button class="ghost-btn view-receipt" data-id="${escapeHtml(receipt.id)}">View</button><button class="primary-btn claim-receipt" data-id="${escapeHtml(receipt.id)}" ${isClaimed ? "disabled" : ""}>Claim</button></div></article>`;
       }).join("") || `<div class="empty">No receipts found.</div>`;
-      document.querySelectorAll(".claim-receipt").forEach((button) => button.addEventListener("click", () => claimReceipt(button.dataset.id)));
+      document.querySelectorAll(".claim-receipt").forEach((button) => button.addEventListener("click", () => claimReceipt(button.dataset.id, button)));
       document.querySelectorAll(".view-receipt").forEach((button) => button.addEventListener("click", () => showReceipt(button.dataset.id)));
     };
 
-    byId("sampleReceipt").addEventListener("click", () => addReceipt(DATA.products[0]));
+    document.querySelectorAll(".cancel-reservation").forEach((button) => button.addEventListener("click", () => {
+      openModal(`<h2>Cancel reservation?</h2><p>The reserved unit will be returned to the store's available stock.</p><button class="primary-btn" type="button" id="confirmCancelReservation">Cancel reservation</button>`);
+      byId("confirmCancelReservation").addEventListener("click", async (event) => {
+        event.target.disabled = true;
+        try { await buyerClient().updateReservation(button.dataset.id, "Cancelled"); await renderReceipts(); }
+        catch (error) { if (error.code !== "ACCOUNT_CHANGED") openModal(`<h2>Unable to cancel</h2><p>${escapeHtml(error.message)}</p>`); }
+      });
+    }));
     ["receiptSearch", "receiptFilter"].forEach((id) => byId(id).addEventListener("input", draw));
     draw();
   }
 
-  function qrPattern(text) {
-    let seed = 0;
-    for (const char of text) seed = (seed * 31 + char.charCodeAt(0)) >>> 0;
-    return Array.from({ length: 81 }, (_, index) => {
-      seed = (seed * 1664525 + 1013904223) >>> 0;
-      const finder = index < 18 || index % 9 < 2 || index > 62;
-      return `<i class="${finder || seed % 3 === 0 ? "on" : ""}"></i>`;
-    }).join("");
+  function showBuyerLoadError(error, retry) {
+    if (error.code === "ACCOUNT_CHANGED") return;
+    const target = byId("buyerLoading");
+    if (!target) return;
+    target.innerHTML = `<p role="alert">${escapeHtml(error.message || "Unable to load your account.")}</p><button type="button" id="retryBuyer" class="primary-btn">Try again</button>`;
+    byId("retryBuyer").addEventListener("click", retry);
   }
 
-  function showReceipt(id) {
+  async function showReceipt(id) {
     const receipt = getReceipts().find((item) => item.id === id);
     if (!receipt) return;
-    openModal(`<div class="qr-modal"><div class="fake-qr">${qrPattern(receipt.id)}</div><div><h2>${escapeHtml(receipt.id)}</h2><p>${escapeHtml(receipt.store)}</p><p>${escapeHtml(receipt.items)}</p><p><b>${money(receipt.amount)}</b> · ${receipt.points} pts</p><button class="primary-btn" id="modalClaim">Claim points</button></div></div>`);
-    byId("modalClaim").addEventListener("click", () => claimReceipt(receipt.id));
+    let qr = "";
+    const revision = openModal(`<p role="status">Loading receipt QR…</p>`);
+    try {
+      if (receipt.qrToken && !receipt.claimed) {
+        const image = await buyerClient().receiptQr(receipt.id);
+        if (revision !== modalRevision || !byId("modal")?.classList.contains("show")) return;
+        if (receiptQrUrl) URL.revokeObjectURL(receiptQrUrl);
+        receiptQrUrl = URL.createObjectURL(image);
+        qr = `<div class="receipt-qr"><img src="${receiptQrUrl}" alt="Receipt claim QR code"></div>`;
+      }
+    } catch (error) {
+      if (error.code === "ACCOUNT_CHANGED") return;
+      qr = `<p role="alert">${escapeHtml(error.message)}</p>`;
+    }
+    if (revision !== modalRevision) return;
+    openModal(`<div class="qr-modal">${qr}<div><h2>${escapeHtml(receipt.id)}</h2><p>${escapeHtml(receipt.store)}</p><p>${escapeHtml(receipt.items)}</p><p><b>${money(receipt.amount)}</b> · ${receipt.points} pts</p>${receipt.claimed ? `<p>Points already claimed.</p>` : `<button class="primary-btn" id="modalClaim" type="button">Claim points</button>${receipt.qrToken ? `<details><summary>Receipt claim token</summary><p>Use this token on Scan QR if your camera is unavailable.</p><textarea class="receipt-token" readonly aria-label="Receipt claim token">${escapeHtml(receipt.qrToken)}</textarea></details>` : ""}`}</div></div>`);
+    byId("modalClaim")?.addEventListener("click", (event) => claimReceipt(receipt.id, event.target));
   }
 
   function renderScan() {
     if (!requirePageAccess(["buyer"])) return;
 
-    const options = getReceipts().map((receipt) => `<option value="${receipt.id}">${receipt.id} - ${receipt.store}</option>`).join("");
-    shell(`${titleBlock("QR scanner", "Prototype receipt validation", "Simulate scanning a digital receipt QR to claim loyalty points once.")}<section class="scan-panel"><div class="scanner"><div class="scan-line"></div><div class="fake-qr large">${qrPattern("scan-demo")}</div></div><div class="info-card dark"><h3>Scan receipt QR</h3><p>Select a receipt below, then validate it like a scanned QR code.</p><select id="scanSelect">${options}</select><button class="primary-btn" id="scanBtn">Validate receipt</button></div></section>`);
-    byId("scanBtn")?.addEventListener("click", () => claimReceipt(byId("scanSelect").value));
+    shell(`${titleBlock("QR scanner", "Scan your completed purchase receipt", "Use your camera or upload a QR image. Only your own receipt can add points, once.")}<section class="scan-panel"><div class="scanner"><video id="scanVideo" playsinline muted hidden aria-label="Receipt QR camera preview"></video><p id="cameraPlaceholder">Start your camera to scan a receipt QR.</p><canvas id="scanCanvas" hidden></canvas></div><div class="info-card dark"><h2>Scan receipt QR</h2><div class="button-stack"><button class="primary-btn" id="cameraStart" type="button">Start camera</button><button class="ghost-btn" id="cameraStop" type="button" hidden>Stop camera</button></div><label>Upload QR image<input id="scanFile" type="file" accept="image/*"></label><p id="scanStatus" role="status" aria-live="polite"></p><form id="scanTokenForm"><label>Receipt claim token<textarea required id="scanToken" placeholder="Paste the token from your receipt" rows="3"></textarea></label><button class="primary-btn" id="scanBtn" type="submit">Claim receipt points</button></form><p>Camera access requires HTTPS or localhost. If access is unavailable, upload a QR image or enter the claim token from your receipt.</p></div></section>`);
+    bindReceiptScanner();
   }
 
-  function renderPoints() {
-    if (!requirePageAccess(["buyer"])) return;
-
-    const balance = pointsBalance();
-    const tx = getTransactions();
-    shell(`${titleBlock("Points wallet", "Track earned loyalty points", "Points are earned from receipt QR claims and spent on local store rewards.")}<section class="wallet"><div><p class="kicker">Current balance</p><h2>${balance.toLocaleString()} pts</h2><div class="track"><span style="width:${Math.min(100, balance / 10)}%"></span></div><p>${balance >= 1000 ? "Gold Builder" : balance >= 500 ? "Silver Builder" : "Starter Builder"}</p></div><img src="images/model.jpg" alt="Gunpla builder mascot"></section><section class="history-list">${tx.map((item) => `<article><b>+${item.points} pts</b><span>${item.store}</span><small>${item.receiptId} · ${new Date(item.date).toLocaleDateString()}</small></article>`).join("") || `<div class="empty">No point activity yet.</div>`}</section>`);
-  }
-
-  function renderRewards() {
-    if (!requirePageAccess(["buyer"])) return;
-
-    shell(`${titleBlock("Rewards", "Redeem points for store perks", "Encourage repeat purchases through useful hobby rewards, not random coupons.")}<section class="reward-grid">${DATA.rewards.map((reward) => `<article class="info-card"><span class="pill yellow">${reward.cost} pts</span><h3>${reward.title}</h3><p>${reward.description}</p><small>${reward.store}</small><button class="primary-btn redeem-btn" data-id="${reward.id}">Redeem</button></article>`).join("")}</section>`);
-    document.querySelectorAll(".redeem-btn").forEach((button) => button.addEventListener("click", () => {
-      const reward = DATA.rewards.find((item) => item.id === button.dataset.id);
-      if (pointsBalance() < reward.cost) {
-        openModal(`<h2>Not enough points</h2><p>You need ${reward.cost} points to redeem this reward.</p>`);
+  function bindReceiptScanner() {
+    const video = byId("scanVideo");
+    const canvas = byId("scanCanvas");
+    const status = byId("scanStatus");
+    const token = byId("scanToken");
+    const start = byId("cameraStart");
+    const stop = byId("cameraStop");
+    const form = byId("scanTokenForm");
+    const owner = currentAccount();
+    let stream = null;
+    let frame = null;
+    let generation = 0;
+    let lastScan = 0;
+    const active = () => form.isConnected && currentAccount()?.token === owner.token;
+    const stopCamera = () => {
+      generation += 1;
+      if (frame) cancelAnimationFrame(frame);
+      frame = null;
+      stream?.getTracks().forEach((track) => track.stop());
+      stream = null;
+      video.srcObject = null;
+      video.hidden = true;
+      start.disabled = false;
+      stop.hidden = true;
+      byId("cameraPlaceholder")?.removeAttribute("hidden");
+    };
+    const onVisibility = () => { if (document.hidden) stopCamera(); };
+    const onPageHide = () => stopCamera();
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    stopScanner = () => {
+      stopCamera();
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pagehide", onPageHide);
+      stopScanner = () => {};
+    };
+    const found = (value) => {
+      if (!active()) return;
+      stopCamera();
+      token.value = value;
+      delete form.dataset.requestId;
+      status.textContent = "QR code read. Select Claim receipt points to validate it with your account.";
+      byId("scanBtn").focus();
+    };
+    function scan(time) {
+      if (!active() || !stream) return;
+      if (video.readyState >= 2 && time - lastScan > 180) {
+        lastScan = time;
+        const scale = Math.min(1, 1000 / Math.max(video.videoWidth, video.videoHeight));
+        canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+        const context = canvas.getContext("2d", { willReadFrequently: true });
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+        const result = window.jsQR(pixels.data, pixels.width, pixels.height, { inversionAttempts: "attemptBoth" });
+        if (result?.data) { found(result.data); return; }
+      }
+      frame = requestAnimationFrame(scan);
+    }
+    start.addEventListener("click", async () => {
+      if (!navigator.mediaDevices?.getUserMedia || typeof window.jsQR !== "function") {
+        status.textContent = "Camera scanning is unavailable. Upload a QR image or paste your receipt claim token.";
         return;
       }
-      const list = getRedemptions();
-      list.unshift({ ...reward, date: new Date().toISOString() });
-      write(keys.redemptions, list);
-      openModal(`<h2>Reward redeemed</h2><p>${reward.title} has been added to your rewards record.</p>`);
+      const attempt = ++generation;
+      start.disabled = true;
+      status.textContent = "Waiting for camera permission…";
+      try {
+        const camera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        if (!active() || attempt !== generation) { camera.getTracks().forEach((track) => track.stop()); return; }
+        stream = camera;
+        video.srcObject = camera;
+        video.hidden = false;
+        stop.hidden = false;
+        byId("cameraPlaceholder").hidden = true;
+        await video.play();
+        if (!active() || attempt !== generation) return;
+        status.textContent = "Point the camera at your receipt QR code.";
+        frame = requestAnimationFrame(scan);
+      } catch {
+        if (!active() || attempt !== generation) return;
+        stopCamera();
+        status.textContent = "Camera access failed or was denied. Upload a QR image or paste your receipt claim token below.";
+      }
+    });
+    stop.addEventListener("click", () => { stopCamera(); status.textContent = "Camera stopped."; });
+    byId("scanFile").addEventListener("change", async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      stopCamera();
+      status.textContent = "Reading QR image…";
+      try { const value = await window.GUNPLA_BUYER.decodeImage(file); found(value); }
+      catch (error) { if (active()) status.textContent = error.message; }
+      finally { if (active()) event.target.value = ""; }
+    });
+    token.addEventListener("input", () => { delete form.dataset.requestId; });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const button = byId("scanBtn");
+      if (button.disabled) return;
+      button.disabled = true;
+      form.dataset.requestId ||= window.GUNPLA_BUYER.requestId();
+      status.textContent = "Validating your receipt…";
+      try {
+        const result = await buyerClient().claim(token.value.trim(), form.dataset.requestId);
+        if (!active()) return;
+        stopCamera();
+        token.value = "";
+        delete form.dataset.requestId;
+        status.textContent = `Receipt claimed. Your balance is ${result.balance} points.`;
+        openModal(`<h2>Points claimed</h2><p>Your receipt was validated and your balance is ${escapeHtml(result.balance)} points.</p><a class="primary-btn" href="points.html">View points</a>`);
+      } catch (error) {
+        if (active()) status.textContent = error.message;
+      } finally { if (active()) button.disabled = false; }
+    });
+  }
+
+  async function renderPoints() {
+    if (!requirePageAccess(["buyer"])) return;
+    shell(`${titleBlock("Points wallet", "Track earned loyalty points", "Points are earned from completed purchase receipts and spent on store rewards.")}<div id="buyerLoading" class="empty" role="status">Loading your points…</div>`);
+    try { await loadBuyerSummary(); }
+    catch (error) { showBuyerLoadError(error, renderPoints); return; }
+    const balance = pointsBalance();
+    const tx = getTransactions();
+    const activity = [...tx.map((item) => ({ ...item, label: `+${item.points} pts`, description: item.receiptId })), ...getRedemptions().map((item) => ({ ...item, label: `−${item.cost} pts`, description: item.title }))].sort((a, b) => new Date(b.date) - new Date(a.date));
+    byId("buyerLoading").outerHTML = `<section class="wallet"><div><p class="kicker">Current balance</p><h2>${balance.toLocaleString()} pts</h2><div class="track"><span style="width:${Math.min(100, balance / 10)}%"></span></div><p>${balance >= 1000 ? "Gold Builder" : balance >= 500 ? "Silver Builder" : "Starter Builder"}</p></div><img src="images/model.jpg" alt="Gunpla builder mascot"></section><section class="history-list" aria-label="Point activity">${activity.map((item) => `<article><b>${escapeHtml(item.label)}</b><span>${escapeHtml(item.store)}</span><small>${escapeHtml(item.description)} · ${new Date(item.date).toLocaleDateString()}</small></article>`).join("") || `<div class="empty">No point activity yet.</div>`}</section>`;
+  }
+
+  async function renderRewards() {
+    if (!requirePageAccess(["buyer"])) return;
+    shell(`${titleBlock("Rewards", "Redeem points for store perks", "Your points balance and reward pickup records are saved to your account.")}<div id="buyerLoading" class="empty" role="status">Loading your rewards…</div>`);
+    let rewards;
+    try { const results = await Promise.all([loadBuyerSummary(), buyerClient().rewards()]); rewards = results[1].rewards; }
+    catch (error) { showBuyerLoadError(error, renderRewards); return; }
+    byId("buyerLoading").outerHTML = `<p class="buyer-balance">Available balance: <b>${pointsBalance().toLocaleString()} pts</b></p><section class="reward-grid">${rewards.map((reward) => `<article class="info-card"><span class="pill yellow">${reward.cost} pts</span><h3>${escapeHtml(reward.title)}</h3><p>${escapeHtml(reward.description)}</p><small>${escapeHtml(reward.store)}</small><button class="primary-btn redeem-btn" type="button" data-id="${escapeHtml(reward.id)}" ${pointsBalance() < reward.cost ? "disabled" : ""}>Redeem</button></article>`).join("") || `<div class="empty">No rewards are available.</div>`}</section><h2>Your reward pickup records</h2><section class="history-list">${getRedemptions().map((item) => `<article><b>${escapeHtml(item.title)}</b><span>${escapeHtml(item.store)} · ${escapeHtml(item.status)}</span><small>Pickup code: <strong>${escapeHtml(item.code)}</strong> · ${item.cost} pts · ${new Date(item.date).toLocaleDateString()}</small></article>`).join("") || `<div class="empty">No rewards redeemed yet.</div>`}</section>`;
+    document.querySelectorAll(".redeem-btn").forEach((button) => button.addEventListener("click", () => {
+      const reward = rewards.find((item) => item.id === button.dataset.id);
+      openModal(`<h2>Redeem ${escapeHtml(reward.title)}?</h2><p>This uses ${reward.cost} points from your balance.</p><button class="primary-btn" id="confirmRedeem" type="button">Confirm redemption</button>`);
+      const requestId = window.GUNPLA_BUYER.requestId();
+      byId("confirmRedeem").addEventListener("click", async (event) => {
+        const confirm = event.target;
+        confirm.disabled = true;
+        try {
+          const result = await buyerClient().redeem(reward.id, requestId);
+          await renderRewards();
+          openModal(`<h2>Reward redeemed</h2><p>Present pickup code <b>${escapeHtml(result.redemption.code)}</b> at ${escapeHtml(result.redemption.store)}.</p>`);
+        } catch (error) {
+          if (error.code !== "ACCOUNT_CHANGED") {
+            let notice = byId("redeemError");
+            if (!notice) { notice = document.createElement("p"); notice.id = "redeemError"; notice.setAttribute("role", "alert"); confirm.before(notice); }
+            notice.textContent = error.message;
+            confirm.disabled = false;
+          }
+        }
+      });
     }));
   }
 
@@ -1077,12 +1198,17 @@
     let storeOwner;
     let recordedSales = [];
     let revenueSales = [];
+    let reservations = [];
+    shell(`<div class="empty" role="status">Loading your store dashboard…</div>`);
     
     try {
-      const [response, salesResponse] = await Promise.all([
+      const [response, salesResponse, reservationData] = await Promise.all([
         fetch(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${sellerAccount.token}` }, cache: "no-store" }),
-        fetch(`${API}/sales?days=366`, { headers: { Authorization: `Bearer ${sellerAccount.token}` }, cache: "no-store" })
+        fetch(`${API}/sales?days=366`, { headers: { Authorization: `Bearer ${sellerAccount.token}` }, cache: "no-store" }),
+        buyerClient().reservations()
       ]);
+      if (currentAccount()?.token !== sellerAccount.token) return;
+      reservations = reservationData.reservations.map((item) => ({ ...item, date: new Date(item.createdAt).toLocaleDateString(), customer: item.customer || "Buyer" }));
       if (!salesResponse.ok) throw new Error("Unable to load completed sales.");
       revenueSales = (await salesResponse.json()).sales;
       const today = window.GUNPLA_SALES.today();
@@ -1094,15 +1220,12 @@
       liveProductsList = dashboard.products;
       storeOwner = dashboard.user;
     } catch (error) {
+      if (currentAccount()?.token !== sellerAccount.token || error.code === "ACCOUNT_CHANGED") return;
       shell(`<section class="info-card dark"><h2>Unable to load your store inventory</h2><p>Check your connection and sign in again if your session expired.</p><a class="primary-btn" href="admin-dashboard.html">Open product catalog</a></section>`);
       return;
     }
 
     const receipts = recordedSales;
-    const receiptIds = new Set(receipts.map((receipt) => receipt.id));
-    const transactions = getTransactions().filter((transaction) => receiptIds.has(transaction.receiptId));
-    const redemptions = [];
-    const reservations = getSellerReservations().filter((item) => item.storeId === storeOwner.id);
     const sellerOffers = getSellerOffers();
     const sellerOfferReceipts = receipts.filter((receipt) => receipt.source === "seller-offer");
     const offerSales = sellerOfferReceipts.reduce((sum, receipt) => sum + Number(receipt.amount || 0), 0);
@@ -1120,22 +1243,14 @@
 
     const sales = receipts.reduce((sum, receipt) => sum + Number(receipt.amount), 0);
     const lowStockProducts = products.filter((product) => product.liveStock <= 5);
-    const activeReservations = reservations.filter((item) => item.status !== "Completed");
-
-    const pointLiability = Math.max(
-      0,
-      transactions.reduce((sum, item) => sum + Number(item.points || 0), 0) -
-      redemptions.reduce((sum, item) => sum + Number(item.cost || 0), 0)
-    );
-
-    const claimRate = receipts.length ? Math.round((transactions.length / receipts.length) * 100) : 0;
+    const activeReservations = reservations.filter((item) => item.status === "Reserved");
 
     const demandRows = products.map((product) => {
       const receiptHits = product.soldCount;
 
       const reservationHits = reservations.filter((item) =>
         item.productId === product.id ||
-        item.productName.toLowerCase().includes(product.name.toLowerCase())
+        String(item.name || "").toLowerCase().includes(String(product.name).toLowerCase())
       ).length;
 
       const lowStockBoost = product.liveStock <= 5 ? 18 : 0;
@@ -1221,9 +1336,9 @@
         </article>
 
         <article>
-          <span>QR claim rate</span>
-          <b>${claimRate}%</b>
-          <small>${pointLiability.toLocaleString()} points liability</small>
+          <span>Completed pickups</span>
+          <b>${reservations.filter((item) => item.status === "Completed").length}</b>
+          <small>Server-confirmed purchases with buyer receipts</small>
         </article>
 
         <article>
@@ -1436,11 +1551,12 @@
 
           <div class="seller-list">
             ${
-              activeReservations.slice(0, 5).map((item) => `
+              activeReservations.map((item) => `
                 <div>
                   <span class="pill ${item.status === "Pre-order" ? "yellow" : "green"}">${item.status}</span>
-                  <b>${escapeHtml(item.productName)}</b>
-                  <small>${item.customer} · ${item.store} · ${item.date}</small>
+                  <b>${escapeHtml(item.name)}</b>
+                  <small>${escapeHtml(item.customer)} · ${escapeHtml(item.store)} · ${escapeHtml(item.date)} · ${money(item.amount)}</small>
+                  <div class="seller-reservation-actions"><button class="primary-btn seller-reservation-action" data-id="${escapeHtml(item.id)}" data-status="Completed" type="button">Complete pickup</button><button class="ghost-btn seller-reservation-action" data-id="${escapeHtml(item.id)}" data-status="Cancelled" type="button">Cancel reservation</button></div>
                 </div>
               `).join("") || `<div class="empty">No active reservations.</div>`
             }
@@ -1475,6 +1591,27 @@
         </article>
       </section>
     `);
+
+    document.querySelectorAll(".seller-reservation-action").forEach((button) => button.addEventListener("click", () => {
+      const complete = button.dataset.status === "Completed";
+      const reservation = reservations.find((item) => item.id === button.dataset.id);
+      openModal(`<h2>${complete ? "Complete pickup?" : "Cancel reservation?"}</h2><p>${escapeHtml(reservation.name)} · ${money(reservation.amount)}</p><p>${complete ? "Confirm the buyer has collected and paid for this purchase. This creates their receipt and records the sale." : "The reserved unit will be returned to available stock."}</p><button class="primary-btn" id="confirmReservationUpdate" type="button">${complete ? "Confirm completed purchase" : "Confirm cancellation"}</button>`);
+      byId("confirmReservationUpdate").addEventListener("click", async (event) => {
+        const confirm = event.target;
+        confirm.disabled = true;
+        try {
+          await buyerClient().updateReservation(reservation.id, button.dataset.status);
+          await renderSeller(complete ? "Pickup completed. The buyer can now view their receipt and claim points." : "Reservation cancelled. Stock has been restored.");
+        } catch (error) {
+          if (error.code !== "ACCOUNT_CHANGED") {
+            let notice = byId("reservationUpdateError");
+            if (!notice) { notice = document.createElement("p"); notice.id = "reservationUpdateError"; notice.setAttribute("role", "alert"); confirm.before(notice); }
+            notice.textContent = error.message;
+            confirm.disabled = false;
+          }
+        }
+      });
+    }));
 
     window.GUNPLA_SALES.mount({ container: byId("sellerSales"), products: liveProductsList, receipts: recordedSales, api: API, token: sellerAccount.token,
       onSaved: (sale) => renderSeller(`Sale ${sale.id} recorded. Sales analytics and inventory have been refreshed.`) });
@@ -1628,8 +1765,12 @@
 
   function saveAuthenticatedAccount(data, fallback = {}) {
     const user = data?.user || {};
+    const decoded = decodeToken(data?.token);
+    const id = String(decoded?.id || user.id || user._id || fallback.id || "");
+    if (!id || !decoded) throw new Error("The server returned an invalid session. Please sign in again.");
     const role = normalizeAccountRole(user.role) || normalizeAccountRole(fallback.role) || "buyer";
     const account = {
+      id,
       username: user.username || fallback.username || "",
       email: user.email || fallback.email || "",
       storeName: user.storeName || fallback.storeName || "",
@@ -1638,6 +1779,7 @@
       token: data.token
     };
 
+    clearBuyerState();
     write(keys.account, account);
     localStorage.setItem("token", data.token);
     return account;
@@ -1656,7 +1798,7 @@
         <div class="auth-copy">
           <div class="role-summary">
             <span class="pill ${activeAccount ? "green" : "yellow"}">Current: ${roleLabels[currentRole()]}</span>
-            ${activeAccount?.email ? `<small>${activeAccount.email}</small>` : `<small>No account signed in</small>`}
+            ${activeAccount?.email ? `<small>${escapeHtml(activeAccount.email)}</small>` : `<small>No account signed in</small>`}
           </div>
           <div class="auth-actions">
             <a class="ghost-btn" id="guestAccess" href="index.html">Continue as Guest</a>
@@ -1671,9 +1813,9 @@
           </div>
 
           <form class="auth-form" id="loginForm">
-            <label>Email<input required type="email" id="loginEmail" placeholder="builder@email.com"></label>
-            <label>Password<input required type="password" id="loginPassword" placeholder="Password"></label>
-            <button class="primary-btn">Login</button>
+            <label>Email<input required type="email" id="loginEmail" autocomplete="email" placeholder="builder@email.com"></label>
+            <label>Password<input required type="password" id="loginPassword" autocomplete="current-password" placeholder="Password"></label>
+            <button class="primary-btn" type="submit">Login</button>
           </form>
 
           <form class="auth-form hidden" id="registerForm">
@@ -1684,22 +1826,75 @@
               </select>
             </label>
             <label>Username<input required type="text" id="registerUsername" placeholder="Gunpla builder"></label>
-            <label>Email<input required type="email" id="registerEmail" placeholder="builder@email.com"></label>
-            <label>Password<input required minlength="6" type="password" id="registerPassword" placeholder="At least 6 characters"></label>
+            <label>Email<input required type="email" id="registerEmail" autocomplete="email" placeholder="builder@email.com"></label>
+            <label>Password<input required minlength="8" maxlength="72" type="password" id="registerPassword" autocomplete="new-password" placeholder="At least 8 characters"></label>
+            <small>Use at least 8 characters. Passwords may contain up to 72 UTF-8 bytes.</small>
             <div class="seller-register-fields hidden" id="sellerRegisterFields">
               <label>Store name<input type="text" id="registerStoreName" placeholder="Baguio Hobby Garage"></label>
               <label>Store location<input type="text" id="registerStoreLocation" placeholder="Session Road, Baguio City"></label>
             </div>
-            <button class="primary-btn">Create account</button>
+            <button class="primary-btn" type="submit">Create account</button>
           </form>
+          <p class="auth-status" id="authStatus" role="status" aria-live="polite"></p>
+          <section class="verification-recovery" id="verificationRecovery" hidden aria-labelledby="verificationTitle">
+            <h2 id="verificationTitle">Verify your email</h2>
+            <p>Check your inbox and spam folder for your verification link. If delivery failed or the link expired, request another email here.</p>
+            <form class="auth-form" id="resendVerificationForm"><label>Email<input required type="email" id="verificationEmail" autocomplete="email" placeholder="builder@email.com"></label><button class="ghost-btn" type="submit" id="resendVerificationBtn">Resend verification email</button></form>
+            <p id="verificationStatus" role="status" aria-live="polite"></p>
+          </section>
         </div>
       </section>
     `);
 
     byId("authLogout")?.addEventListener("click", signOut);
     byId("guestAccess")?.addEventListener("click", () => {
+      clearBuyerState();
       localStorage.removeItem(keys.account);
       localStorage.removeItem("token");
+    });
+
+    const authStatus = byId("authStatus");
+    if (new URLSearchParams(location.search).get("verified") === "true") authStatus.textContent = "Email verified. You can now log in.";
+    let retryAvailableAt = 0;
+    let cooldownTimer;
+    const recoveryForm = byId("resendVerificationForm");
+    const updateResend = () => {
+      if (!recoveryForm.isConnected) { clearInterval(cooldownTimer); return; }
+      const remaining = Math.max(0, Math.ceil((retryAvailableAt - Date.now()) / 1000));
+      const button = byId("resendVerificationBtn");
+      button.disabled = remaining > 0;
+      button.textContent = remaining ? `Resend available in ${remaining}s` : "Resend verification email";
+      if (!remaining) { clearInterval(cooldownTimer); cooldownTimer = null; }
+    };
+    const showVerification = (email, message, retryAfterSeconds = 0) => {
+      byId("verificationRecovery").hidden = false;
+      byId("verificationEmail").value = email || "";
+      byId("verificationStatus").textContent = message;
+      retryAvailableAt = Date.now() + Math.max(0, Number(retryAfterSeconds) || 0) * 1000;
+      clearInterval(cooldownTimer);
+      updateResend();
+      if (retryAvailableAt > Date.now()) cooldownTimer = setInterval(updateResend, 1000);
+    };
+    byId("resendVerificationForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = byId("resendVerificationBtn");
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = "Sending…";
+      byId("verificationStatus").textContent = "Requesting a verification email…";
+      const email = byId("verificationEmail").value.trim();
+      try {
+        const response = await fetch(`${API}/auth/resend-verification`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }), signal: AbortSignal.timeout(20000)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!form.isConnected) return;
+        showVerification(email, responseMessage(data, response.ok ? "If this account needs verification, a new email has been sent." : "Unable to send verification email. Try again."), data.retryAfterSeconds ?? (response.ok ? 60 : 0));
+      } catch {
+        if (form.isConnected) showVerification(email, "Unable to contact the server. You can retry sending the verification email.");
+      }
     });
 
     const syncSellerRegisterFields = () => {
@@ -1734,10 +1929,14 @@
 
     byId("loginForm").addEventListener("submit", async (event) => {
       event.preventDefault();
-
-      // Removed 'role' from payload since backend authenticates by email/password only
+      const form = event.currentTarget;
+      const button = form.querySelector("button[type=submit]");
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = "Logging in…";
+      authStatus.textContent = "Signing in…";
       const payload = {
-        email: byId("loginEmail").value,
+        email: byId("loginEmail").value.trim(),
         password: byId("loginPassword").value
       };
 
@@ -1745,34 +1944,45 @@
         const response = await fetch(`${API}/auth/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload), signal: AbortSignal.timeout(20000)
         });
 
         const data = await response.json().catch(() => ({}));
+        if (!form.isConnected) return;
 
         if (!response.ok) {
-          alert(responseMessage(data, "Invalid credentials. Check your email and password."));
+          authStatus.textContent = responseMessage(data, "Invalid credentials. Check your email and password.");
+          if (data.verificationRequired || data.code === "VERIFICATION_REQUIRED") showVerification(data.email || payload.email, "Verify your email before logging in. You can request another verification email here.", data.retryAfterSeconds);
           return;
         }
 
-        // Pass data.user instead of payload so it uses the actual database role ('admin', 'seller', or 'buyer')
         const account = saveAuthenticatedAccount(data, data.user);
+        renderAuth();
         openModal(`<h2>${roleLabels[account.role]} login successful</h2><p>Your ${account.role} access is active.</p><a class="primary-btn" href="${roleHome(account.role)}">Continue</a>`);
       } catch (error) {
-        console.error("Auth server error:", error);
-        alert("Failed to connect to the backend authentication server. Is your node server running on port 5000?");
-      }
+        if (form.isConnected) authStatus.textContent = error.message === "The server returned an invalid session. Please sign in again." ? error.message : "Unable to contact the authentication server. Check your connection and try again.";
+      } finally { button.disabled = false; button.textContent = "Login"; }
     });
 
     byId("registerForm").addEventListener("submit", async (event) => {
       event.preventDefault();
+      const form = event.currentTarget;
+      const button = form.querySelector("button[type=submit]");
+      if (button.disabled) return;
 
       const payload = {
         role: byId("registerRole").value,
         username: byId("registerUsername").value,
-        email: byId("registerEmail").value,
+        email: byId("registerEmail").value.trim(),
         password: byId("registerPassword").value
       };
+      if (new TextEncoder().encode(payload.password).length > 72) {
+        authStatus.textContent = "Password must contain no more than 72 UTF-8 bytes. Use a shorter password.";
+        return;
+      }
+      button.disabled = true;
+      button.textContent = "Creating account…";
+      authStatus.textContent = "Creating your account and requesting verification email…";
 
       if (payload.role === "seller") {
         payload.storeName = byId("registerStoreName").value.trim();
@@ -1783,21 +1993,28 @@
         const response = await fetch(`${API}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload), signal: AbortSignal.timeout(20000)
         });
 
         const data = await response.json().catch(() => ({}));
+        if (!form.isConnected) return;
 
         if (!response.ok) {
-          alert(responseMessage(data, "Unable to create account. Check the form and try again."));
+          authStatus.textContent = responseMessage(data, "Unable to create account. Check the form and try again.");
+          if (data.verificationRequired || ["VERIFICATION_EMAIL_FAILED", "VERIFICATION_REQUIRED"].includes(data.code)) showVerification(data.email || payload.email, data.code === "VERIFICATION_EMAIL_FAILED" ? "Your account is saved, but email delivery failed. Retry sending the verification email below." : "This account is waiting for verification. Request another email below.", data.retryAfterSeconds);
           return;
         }
 
-        openModal(`<h2>Registration Successful!</h2><p>${data.message || "Please check your email to verify your account before logging in."}</p><a class="primary-btn" href="login.html">Go to Login</a>`);
-      } catch (error) {
-        console.error("Auth server error:", error);
-        alert("Failed to connect to the backend authentication server. Is your node server running on port 5000?");
-      }
+        authStatus.textContent = responseMessage(data, "Account created. Check your email to verify it before logging in.");
+        showVerification(data.email || payload.email, "Check your inbox and spam folder for your verification link.", data.retryAfterSeconds ?? 60);
+        byId("loginEmail").value = payload.email;
+        byId("registerPassword").value = "";
+      } catch {
+        if (form.isConnected) {
+          authStatus.textContent = "The registration response could not be received. Check your email for a verification link, or request another email below.";
+          showVerification(payload.email, "If your account was created, you can recover verification email delivery here.");
+        }
+      } finally { button.disabled = false; button.textContent = "Create account"; }
     });
   }
 
@@ -1880,5 +2097,15 @@
       event.target.src = "images/product-placeholder.svg";
     }
   }, true);
+  window.addEventListener("storage", (event) => {
+    if (event.key !== null && ![keys.account, "token"].includes(event.key)) return;
+    clearBuyerState();
+    app.replaceChildren();
+    window.location.reload();
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) { clearBuyerState(); startPage(); }
+  });
+  clearBuyerState();
   startPage();
 })();

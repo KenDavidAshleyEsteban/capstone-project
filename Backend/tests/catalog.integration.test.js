@@ -5,25 +5,30 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const fs = require('node:fs/promises');
+const os = require('node:os');
+const path = require('node:path');
 
 // Always use a new test database; never read or mutate the application's database.
 test('catalog API persists products and photos and enforces store ownership', { skip: !process.env.TEST_MONGODB_URI }, async (t) => {
   process.env.JWT_SECRET = 'isolated-catalog-integration-test-secret';
+  process.env.EMAIL_MODE = 'file';
+  process.env.BACKEND_URL = 'http://127.0.0.1:5000';
+  process.env.FRONTEND_URL = 'http://127.0.0.1:5000';
+  process.env.EMAIL_OUTBOX_DIR = await fs.mkdtemp(path.join(os.tmpdir(), 'gunpla-catalog-outbox-'));
   const database = `gunpla_catalog_test_${Date.now()}`;
   let server;
   t.after(async () => {
     if (server) await new Promise((resolve) => server.close(resolve));
     if (mongoose.connection.readyState === 1) await mongoose.connection.dropDatabase();
     await mongoose.disconnect();
+    await fs.rm(process.env.EMAIL_OUTBOX_DIR, { recursive: true, force: true });
   });
   await mongoose.connect(process.env.TEST_MONGODB_URI, { dbName: database });
-  // Registration is tested locally; never initialize or contact an email provider.
-  const emailModule = require.resolve('../utils/sendEmail');
-  require.cache[emailModule] = { id: emailModule, filename: emailModule, loaded: true, exports: async () => {} };
   await Product.init();
   const password = await bcrypt.hash('Catalog-test-password!', 4);
   const [admin, seller, other, buyer] = await Promise.all([
-    User.create({ username: 'Admin', email: 'admin@test.invalid', password, role: 'admin' }),
+    User.create({ username: 'Admin', email: 'admin@test.invalid', password, role: 'admin', isVerified: true }),
     User.create({ username: 'Owner', email: 'owner@test.invalid', password, role: 'seller', storeName: 'Build Station' }),
     User.create({ username: 'Other', email: 'other@test.invalid', password, role: 'seller', storeName: 'Other Store' }),
     User.create({ username: 'Buyer', email: 'buyer@test.invalid', password, role: 'buyer' })

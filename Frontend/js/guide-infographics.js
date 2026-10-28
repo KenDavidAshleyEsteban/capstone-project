@@ -1,7 +1,6 @@
 (() => {
   'use strict';
   const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
-  const robot = () => `<svg viewBox="0 0 120 180" aria-hidden="true" focusable="false"><g class="guide-mech-outline"><path d="M43 18 30 7M77 18 90 7M45 14H75L80 35 69 44H51L40 35Z"/><path d="M47 28H73M60 15V40M36 48H84L89 88 76 102H44L31 88Z"/><path d="M39 55 60 67 81 55M47 85H73M46 103H74L81 116 69 128H51L39 116Z"/><path d="M30 48H17L10 80 18 88 29 79ZM90 48H103L110 80 102 88 91 79ZM15 90H29V119H12ZM91 90H105L108 119H91Z"/><path d="M44 122H57V153L49 171H28L32 157ZM63 122H76L88 157 92 171H71L63 153ZM32 157H53M67 157H88"/></g><path class="guide-mech-accent" d="M49 28H71V33H49ZM45 55 58 63 58 73 43 66ZM75 55 62 63 62 73 77 66Z"/></svg>`;
   const profiles = {
     EG: ['A simple starting point', 'Start with the manual and check whether the kit uses touch gates or needs nippers.', 'Fewer assembly steps', 'Learn how parts fit'],
     HG: ['A versatile first build', 'Practice clipping, cleanup, and assembly before adding optional finishing details.', 'A manageable build', 'Practice clean assembly'],
@@ -10,32 +9,50 @@
     SD: ['A stylized desk companion', 'Look at the specific series: SD designs and construction vary, and not all are simple.', 'Stylized proportions', 'Choose the design you enjoy'],
     PG: ['A substantial display project', 'Check the manual, workspace, and parts organization before starting a longer project.', 'Usually a larger model', 'Build in organized sessions']
   };
+  const gradePhotos = {
+    EG: 'images/EntryGradenb1.png',
+    HG: 'images/HighGradenb1.png',
+    RG: 'images/RealGradenb1.png',
+    MG: 'images/MasterGradenb1.png',
+    SD: 'images/Deformednb1.png',
+    PG: 'images/PerfectGradenb1.png'
+  };
+  // Crop transparent padding in the SVG viewBox; preserve the original photos.
+  // EG/MG bodyPixels are approximate helmet-to-feet spans, excluding equipment.
+  // Heights: Nu 22 m / 144, ZZ 19.86 m / 100; PGU Nu is 38 cm, 56 cm with funnels.
+  const scaleExamples = [
+    { grade: 'EG', name: 'Nu Gundam', scale: 144, bodyCm: 2200 / 144, bodyPixels: 1167, width: 1195, height: 1316, bounds: [69, 35, 1087, 1218] },
+    { grade: 'MG', name: 'ZZ Gundam', scale: 100, bodyCm: 1986 / 100, bodyPixels: 1080, width: 1179, height: 1334, bounds: [136, 31, 962, 1285] },
+    { grade: 'PGU', photoGrade: 'PG', name: 'Nu Gundam', scale: 60, bodyCm: 38, overallCm: 56, width: 1254, height: 1254, bounds: [273, 21, 793, 1226] }
+  ];
+  const photoHeightCm = (example) => example.overallCm ?? example.bodyCm * example.bounds[3] / example.bodyPixels;
+  const tallestPhotoCm = Math.max(...scaleExamples.map(photoHeightCm));
 
   function mount({ container, grades }) {
     if (!container) return;
     container.innerHTML = `
       <section class="guide-infographic" aria-labelledby="scaleGraphicTitle">
-        <div class="guide-infographic-heading"><p class="kicker">Size at a glance</p><h2 id="scaleGraphicTitle">Same mobile suit. Different scale.</h2><p>A smaller scale denominator means a larger model. This diagram uses an 18 m fictional mobile suit as a reference.</p></div>
-        <div class="guide-scale-chart" role="img" aria-label="For an 18 meter mobile suit: 1 to 144 is 12.5 centimeters, 1 to 100 is 18 centimeters, and 1 to 60 is 30 centimeters. Actual kit heights vary by design.">
-          ${[{ scale: '1/144', height: '12.5 cm', grades: 'EG · HG · RG', ratio: 41.6667 }, { scale: '1/100', height: '18 cm', grades: 'MG', ratio: 60 }, { scale: '1/60', height: '30 cm', grades: 'PG', ratio: 100 }].map((item) => `<div class="guide-scale-column"><div class="guide-scale-figure"><div style="height:${item.ratio}%">${robot()}</div></div><strong>${item.scale}</strong><span>${item.height}</span><small>${item.grades}</small></div>`).join('')}
+        <div class="guide-infographic-heading"><p class="kicker">Size at a glance</p><h2 id="scaleGraphicTitle">Different grades. Different sizes.</h2><p>Compare the pictured Entry Grade, Master Grade, and Perfect Grade examples on one size scale. Orange markers show approximate body height; backpack weapons and funnels extend above it.</p></div>
+        <div class="guide-scale-chart" role="img" aria-label="Approximate body heights on one shared baseline: Entry Grade Nu Gundam at 1 to 144, 15.3 centimeters; Master Grade ZZ Gundam at 1 to 100, 19.9 centimeters; Perfect Grade Unleashed Nu Gundam at 1 to 60, 38 centimeters, or about 56 centimeters including fin funnels. EG and MG heights are scale estimates. Photos illustrate relative sizes and poses can affect their apparent height.">
+          ${scaleExamples.map((item) => `<div class="guide-scale-column"><div class="guide-scale-figure" style="--photo-height:${100 * photoHeightCm(item) / tallestPhotoCm}%;--body-height:${100 * item.bodyCm / tallestPhotoCm}%"><span class="guide-scale-body-marker" aria-hidden="true"></span><svg viewBox="${item.bounds.join(' ')}" width="${item.bounds[2]}" height="${item.bounds[3]}" aria-hidden="true" focusable="false"><image href="${escape(gradePhotos[item.photoGrade ?? item.grade])}" width="${item.width}" height="${item.height}"/></svg></div><strong>1/${item.scale}</strong><span>≈${item.bodyCm.toFixed(1)} cm body</span><small>${item.grade} · ${item.name}</small><small>${item.overallCm ? `≈${item.overallCm} cm with funnels` : 'Body height estimate'}</small></div>`).join('')}
         </div>
-        <p class="guide-infographic-footnote">Illustrative heights, not a size guarantee. Grade and scale are different: check each box for its scale; SD uses stylized proportions. <a href="https://satellite.bandai-hobby.net/characters/gundam_list.php" target="_blank" rel="noopener noreferrer">BANDAI grade overview ↗</a></p>
+        <p class="guide-infographic-footnote">Approximate body heights: EG and MG use mobile-suit height divided by scale; PG uses published kit measurements. Poses and equipment affect total height. Sources: <a href="https://g-versus.ggame.jp/sp/ms_stage/ms/detail.php?ms=yh62smdj" target="_blank" rel="noopener noreferrer">Nu Gundam specs ↗</a>, <a href="https://manual.bandai-hobby.net/pdf/629.pdf" target="_blank" rel="noopener noreferrer">ZZ Gundam manual ↗</a>, <a href="https://www.bandaispirits.co.jp/products/search/detail.php?grp_id=5325&amp;prd_id=4573102691910000" target="_blank" rel="noopener noreferrer">PGU Nu Gundam dimensions ↗</a>.</p>
       </section>
 
       <section class="guide-infographic guide-grade-explorer" aria-labelledby="gradeExplorerTitle">
         <div class="guide-infographic-heading"><p class="kicker">Find your build</p><h2 id="gradeExplorerTitle">Explore the grades</h2><p>Select a grade to compare its typical scale and building focus. Construction varies by kit and series.</p></div>
-        <div class="guide-grade-choices" role="group" aria-label="Select a kit grade">${grades.map((grade) => `<button class="guide-grade-choice" type="button" data-grade="${escape(grade.code)}" aria-pressed="${grade.code === 'HG'}" aria-controls="guideGradeDetail">${escape(grade.code)}<small>${escape(grade.name)}</small></button>`).join('')}</div>
+        <div class="guide-grade-choices" role="group" aria-label="Select a kit grade">${grades.map((grade) => `<button class="guide-grade-choice" type="button" data-grade="${escape(grade.code)}" aria-pressed="${grade.code === 'HG'}" aria-controls="guideGradeDetail"><img class="guide-grade-photo" src="${escape(gradePhotos[grade.code])}" alt="" width="400" height="400" loading="lazy" decoding="async"><span>${escape(grade.code)}</span><small>${escape(grade.name)}</small></button>`).join('')}</div>
         <div id="guideGradeDetail" class="guide-grade-detail" aria-live="polite"></div>
       </section>
 
       <section class="guide-infographic" aria-labelledby="cleanupGraphicTitle">
         <div class="guide-infographic-heading"><p class="kicker">Clean parts, better fits</p><h2 id="cleanupGraphicTitle">From runner to ready</h2><p>Find the numbered part in the manual, then work through clipping and cleanup.</p></div>
         <ol class="guide-cut-diagram">
-          <li><svg viewBox="0 0 200 150" role="img" aria-label="Leave a small piece of gate attached when cutting the part from the runner"><path class="guide-runner-line" d="M10 20H190M100 20V64"/><rect class="guide-plastic-part" x="57" y="64" width="86" height="65" rx="8"/><path class="guide-cut-line" d="M77 43H123"/><path class="guide-tool-line" d="M67 12 100 43 133 12"/></svg><h3><span>01</span> Leave a little gate</h3><p>Cut away from the part first, leaving a small amount of plastic attached.</p></li>
-          <li><svg viewBox="0 0 200 150" role="img" aria-label="Carefully trim the remaining gate close to the part"><path class="guide-runner-line" d="M100 40V64"/><rect class="guide-plastic-part" x="57" y="64" width="86" height="65" rx="8"/><path class="guide-cut-line" d="M77 59H123"/><path class="guide-tool-line" d="M70 25 100 59 130 25"/></svg><h3><span>02</span> Trim carefully</h3><p>Support the part and trim the remaining gate in small, controlled cuts.</p></li>
-          <li><svg viewBox="0 0 200 150" role="img" aria-label="Smooth the remaining nub with a sanding stick before assembly"><rect class="guide-plastic-part" x="57" y="64" width="86" height="65" rx="8"/><path class="guide-sanding-stick" d="M53 37H147V53H53Z"/><path class="guide-tool-line" d="M64 22H135M131 17 137 22 131 27M69 17 63 22 69 27"/><path class="guide-clean-edge" d="M68 64H132"/></svg><h3><span>03</span> Smooth and check</h3><p>Gently smooth any nub, then test the fit. Avoid removing more material than needed.</p></li>
+          <li><img src="images/LeaveALittleGate.png" alt="Nippers cutting the runner while leaving a small gate attached to the part" width="400" height="400" loading="lazy" decoding="async"><h3><span>01</span> Leave a little gate</h3><p>Cut away from the part first, leaving a small amount of plastic attached.</p></li>
+          <li><img src="images/TrimCarefully.png" alt="Nippers trimming the remaining gate close to the part" width="400" height="400" loading="lazy" decoding="async"><h3><span>02</span> Trim carefully</h3><p>Support the part and trim the remaining gate in small, controlled cuts.</p></li>
+          <li><img src="images/SmoothAndCheck.png" alt="Plastic part being checked after gate cleanup" width="400" height="400" loading="lazy" decoding="async"><h3><span>03</span> Smooth and check</h3><p>Gently smooth any nub, then test the fit. Avoid removing more material than needed.</p></li>
         </ol>
-        <p class="guide-infographic-footnote"><span class="guide-diagram-key">Orange: plastic gate</span><span class="guide-diagram-key cut">Red dashes: cut location</span>Follow kit-specific instructions for touch gates and undergates. <a href="https://satellite.bandai-hobby.net/For_Oversea_Customer/beginnersguide_tips.html" target="_blank" rel="noopener noreferrer">BANDAI building tips ↗</a></p>
+        <p class="guide-infographic-footnote">Follow kit-specific instructions for touch gates and undergates. <a href="https://satellite.bandai-hobby.net/For_Oversea_Customer/beginnersguide_tips.html" target="_blank" rel="noopener noreferrer">BANDAI building tips ↗</a></p>
       </section>`;
     const detail = container.querySelector('#guideGradeDetail');
     const select = (code) => {
@@ -43,7 +60,7 @@
       if (!grade) return;
       const profile = profiles[code];
       container.querySelectorAll('.guide-grade-choice').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.grade === code)));
-      detail.innerHTML = `<div class="guide-explorer-emblem" aria-hidden="true">${escape(code)}${robot()}</div><div><span class="pill yellow">${escape(grade.scale)}</span><h3>${escape(profile[0])}</h3><p>${escape(profile[1])}</p><dl class="guide-explorer-facts"><div><dt>What to expect</dt><dd>${escape(profile[2])}</dd></div><div><dt>Build focus</dt><dd>${escape(profile[3])}</dd></div></dl><a href="discover.html" class="ghost-btn">Browse local kits</a></div>`;
+      detail.innerHTML = `<div class="guide-explorer-emblem"><span aria-hidden="true">${escape(code)}</span><img class="guide-grade-photo" src="${escape(gradePhotos[code])}" alt="${escape(grade.name)} Gunpla model" width="400" height="400" loading="lazy" decoding="async"></div><div><span class="pill yellow">${escape(grade.scale)}</span><h3>${escape(profile[0])}</h3><p>${escape(profile[1])}</p><dl class="guide-explorer-facts"><div><dt>What to expect</dt><dd>${escape(profile[2])}</dd></div><div><dt>Build focus</dt><dd>${escape(profile[3])}</dd></div></dl><a href="discover.html" class="ghost-btn">Browse local kits</a></div>`;
     };
     container.addEventListener('click', (event) => {
       const button = event.target.closest('.guide-grade-choice');

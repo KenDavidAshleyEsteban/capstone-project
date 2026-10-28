@@ -10,8 +10,9 @@ dotenv.config({ path: path.join(__dirname, '.env'), quiet: true });
 async function createAdmin() {
   const { MONGODB_URI, ADMIN_EMAIL, ADMIN_PASSWORD, ADMIN_USERNAME } = process.env;
   if (!MONGODB_URI || !ADMIN_EMAIL || !ADMIN_PASSWORD || ADMIN_PASSWORD.length < 12
+      || Buffer.byteLength(ADMIN_PASSWORD, 'utf8') > 72
       || ADMIN_PASSWORD === 'replace-with-a-strong-password') {
-    throw new Error('Set MONGODB_URI, ADMIN_EMAIL, and an ADMIN_PASSWORD of at least 12 characters in Backend/.env.');
+    throw new Error('Set MONGODB_URI, ADMIN_EMAIL, and an ADMIN_PASSWORD of at least 12 characters and at most 72 UTF-8 bytes in Backend/.env.');
   }
   await mongoose.connect(MONGODB_URI);
   const existing = await User.findOne({ role: 'admin' });
@@ -23,7 +24,8 @@ async function createAdmin() {
     username: ADMIN_USERNAME || 'StoreAdmin',
     email: ADMIN_EMAIL,
     password: await bcrypt.hash(ADMIN_PASSWORD, 12),
-    role: 'admin'
+    role: 'admin',
+    isVerified: true
   });
   console.log('Admin account created. Sign in from /login.html.');
 }

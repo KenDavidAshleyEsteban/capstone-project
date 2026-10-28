@@ -4,14 +4,18 @@ const UserSchema = new mongoose.Schema({
   username: {
     type: String,
     required: true,
-    trim: true
+    trim: true,
+    minlength: 2,
+    maxlength: 80
   },
   email: {
     type: String,
     required: true,
     unique: true,
     lowercase: true,
-    trim: true
+    trim: true,
+    maxlength: 254,
+    validate: { validator: require('../utils/accountValidation').emailIsValid, message: 'Enter a valid email address.' }
   },
   password: {
     type: String,
@@ -38,10 +42,15 @@ const UserSchema = new mongoose.Schema({
     default: false
   },
   verificationToken: {
-    type: String
+    type: String,
+    select: false
   },
   verificationExpires: {
     type: Date
+  },
+  verificationRequestedAt: {
+    type: Date,
+    select: false
   }
 });
 

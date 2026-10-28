@@ -1,0 +1,125 @@
+.buyer-reservations {
+  margin-bottom: 34px;
+}
+
+.buyer-reservations h2,
+.buyer-balance,
+.reward-grid + h2 {
+  margin-bottom: 18px;
+}
+
+.reservation-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.receipt-card > div,
+.qr-modal > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.qr-modal {
+  display: grid;
+  grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+}
+
+.receipt-qr {
+  padding: 12px;
+  border-radius: 12px;
+  background: white;
+  aspect-ratio: 1;
+}
+
+.receipt-qr img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.receipt-token,
+#scanToken {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-height: 84px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+  resize: vertical;
+}
+
+.qr-modal details {
+  margin-top: 18px;
+}
+
+.qr-modal summary {
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+.scan-panel .info-card {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.scanner video {
+  width: 100%;
+  max-height: 500px;
+  object-fit: contain;
+}
+
+#cameraPlaceholder {
+  max-width: 280px;
+  padding: 20px;
+  text-align: center;
+}
+
+#scanStatus,
+.auth-status,
+#verificationStatus {
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.verification-recovery {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.verification-recovery > p {
+  margin: 14px 0;
+}
+
+.seller-reservation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.seller-reservation-actions button {
+  white-space: normal;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+@media (max-width: 600px) {
+  .qr-modal,
+  .reservation-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .receipt-qr {
+    width: min(240px, 100%);
+    justify-self: center;
+  }
+
+  .scanner {
+    min-height: 260px;
+  }
+}
