@@ -7,10 +7,8 @@
 .guide-scale-column { display: grid; justify-items: center; align-content: start; gap: 6px; text-align: center; }
 .guide-scale-figure { position: relative; display: flex; align-items: flex-end; justify-content: center; width: 100%; max-width: 300px; aspect-ratio: 4 / 5; border-bottom: 1px solid var(--line); }
 .guide-scale-figure svg { display: block; flex: none; height: var(--photo-height); width: auto; }
-.guide-scale-body-marker { position: absolute; bottom: 0; left: 0; width: 8px; height: var(--body-height); border-left: 2px solid var(--orange); border-top: 2px solid var(--orange); border-bottom: 2px solid var(--orange); }
-.guide-scale-column strong { color: var(--yellow); font-size: clamp(1.3rem, 3vw, 2rem); }
-.guide-scale-column > span { font-weight: 700; }
-.guide-scale-column small { color: #cbd5e1; }
+.guide-scale-body-marker { position: absolute; z-index: 1; bottom: 0; left: 0; width: 8px; height: var(--body-height); border-left: 2px solid var(--orange); border-top: 2px solid var(--orange); border-bottom: 2px solid var(--orange); }
+.guide-scale-height-label { position: absolute; top: 0; left: -2px; transform: translateY(calc(-100% - 6px)); padding: 4px 6px; border: 1px solid var(--orange); border-radius: 6px; background: var(--surface); color: var(--yellow); font-size: clamp(.65rem, 1.2vw, .95rem); font-weight: 800; line-height: 1.2; white-space: nowrap; }
 .guide-infographic-footnote { margin-top: 18px; color: #aebaca; font-size: .82rem; line-height: 1.8; }
 .guide-infographic-footnote a { color: var(--yellow); text-decoration: underline; }
 .guide-grade-choices { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }

@@ -20,6 +20,9 @@
   // Crop transparent padding in the SVG viewBox; preserve the original photos.
   // EG/MG bodyPixels are approximate helmet-to-feet spans, excluding equipment.
   // Heights: Nu 22 m / 144, ZZ 19.86 m / 100; PGU Nu is 38 cm, 56 cm with funnels.
+  // References: https://g-versus.ggame.jp/sp/ms_stage/ms/detail.php?ms=yh62smdj
+  // https://manual.bandai-hobby.net/pdf/629.pdf
+  // https://www.bandaispirits.co.jp/products/search/detail.php?grp_id=5325&prd_id=4573102691910000
   const scaleExamples = [
     { grade: 'EG', name: 'Nu Gundam', scale: 144, bodyCm: 2200 / 144, bodyPixels: 1167, width: 1195, height: 1316, bounds: [69, 35, 1087, 1218] },
     { grade: 'MG', name: 'ZZ Gundam', scale: 100, bodyCm: 1986 / 100, bodyPixels: 1080, width: 1179, height: 1334, bounds: [136, 31, 962, 1285] },
@@ -32,11 +35,10 @@
     if (!container) return;
     container.innerHTML = `
       <section class="guide-infographic" aria-labelledby="scaleGraphicTitle">
-        <div class="guide-infographic-heading"><p class="kicker">Size at a glance</p><h2 id="scaleGraphicTitle">Different grades. Different sizes.</h2><p>Compare the pictured Entry Grade, Master Grade, and Perfect Grade examples on one size scale. Orange markers show approximate body height; backpack weapons and funnels extend above it.</p></div>
+        <div class="guide-infographic-heading"><p class="kicker">Size at a glance</p><h2 id="scaleGraphicTitle">Different grades. Different sizes.</h2><p>Approximate model heights from feet to head, shown on the orange measurement lines.</p></div>
         <div class="guide-scale-chart" role="img" aria-label="Approximate body heights on one shared baseline: Entry Grade Nu Gundam at 1 to 144, 15.3 centimeters; Master Grade ZZ Gundam at 1 to 100, 19.9 centimeters; Perfect Grade Unleashed Nu Gundam at 1 to 60, 38 centimeters, or about 56 centimeters including fin funnels. EG and MG heights are scale estimates. Photos illustrate relative sizes and poses can affect their apparent height.">
-          ${scaleExamples.map((item) => `<div class="guide-scale-column"><div class="guide-scale-figure" style="--photo-height:${100 * photoHeightCm(item) / tallestPhotoCm}%;--body-height:${100 * item.bodyCm / tallestPhotoCm}%"><span class="guide-scale-body-marker" aria-hidden="true"></span><svg viewBox="${item.bounds.join(' ')}" width="${item.bounds[2]}" height="${item.bounds[3]}" aria-hidden="true" focusable="false"><image href="${escape(gradePhotos[item.photoGrade ?? item.grade])}" width="${item.width}" height="${item.height}"/></svg></div><strong>1/${item.scale}</strong><span>≈${item.bodyCm.toFixed(1)} cm body</span><small>${item.grade} · ${item.name}</small><small>${item.overallCm ? `≈${item.overallCm} cm with funnels` : 'Body height estimate'}</small></div>`).join('')}
+          ${scaleExamples.map((item) => `<div class="guide-scale-column"><div class="guide-scale-figure" style="--photo-height:${100 * photoHeightCm(item) / tallestPhotoCm}%;--body-height:${100 * item.bodyCm / tallestPhotoCm}%"><span class="guide-scale-body-marker" aria-hidden="true"><span class="guide-scale-height-label">≈${item.bodyCm.toFixed(1)} cm</span></span><svg viewBox="${item.bounds.join(' ')}" width="${item.bounds[2]}" height="${item.bounds[3]}" aria-hidden="true" focusable="false"><image href="${escape(gradePhotos[item.photoGrade ?? item.grade])}" width="${item.width}" height="${item.height}"/></svg></div></div>`).join('')}
         </div>
-        <p class="guide-infographic-footnote">Approximate body heights: EG and MG use mobile-suit height divided by scale; PG uses published kit measurements. Poses and equipment affect total height. Sources: <a href="https://g-versus.ggame.jp/sp/ms_stage/ms/detail.php?ms=yh62smdj" target="_blank" rel="noopener noreferrer">Nu Gundam specs ↗</a>, <a href="https://manual.bandai-hobby.net/pdf/629.pdf" target="_blank" rel="noopener noreferrer">ZZ Gundam manual ↗</a>, <a href="https://www.bandaispirits.co.jp/products/search/detail.php?grp_id=5325&amp;prd_id=4573102691910000" target="_blank" rel="noopener noreferrer">PGU Nu Gundam dimensions ↗</a>.</p>
       </section>
 
       <section class="guide-infographic guide-grade-explorer" aria-labelledby="gradeExplorerTitle">
