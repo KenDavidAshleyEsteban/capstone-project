@@ -29,8 +29,9 @@ function emailConfig(env = process.env) {
     }
   } 
   else if (env.EMAIL_MODE === 'brevo') {
-    if (!env.BREVO_SMTP_USER || !env.BREVO_SMTP_KEY || !env.EMAIL_FROM || !/^[^<>\r\n]*<?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(env.EMAIL_FROM)) {
-      throw new Error('EMAIL_MODE=brevo requires BREVO_SMTP_USER, BREVO_SMTP_KEY, and a valid EMAIL_FROM sender.');
+    const brevoKeyVal = env.BREVO_SMTP_KEY || env.BREVO_API_KEY;
+    if (!env.BREVO_SMTP_USER || !brevoKeyVal || !env.EMAIL_FROM || !/^[^<>\r\n]*<?[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+>?$/.test(env.EMAIL_FROM)) {
+      throw new Error('EMAIL_MODE=brevo requires BREVO_SMTP_USER, BREVO_SMTP_KEY (or BREVO_API_KEY), and a valid EMAIL_FROM sender.');
     }
   }
 
@@ -48,7 +49,7 @@ function emailConfig(env = process.env) {
     apiKey: env.RESEND_API_KEY,
     from: env.EMAIL_FROM,
     brevoUser: env.BREVO_SMTP_USER,
-    brevoKey: env.BREVO_SMTP_KEY
+    brevoKey: env.BREVO_SMTP_KEY || env.BREVO_API_KEY
   };
 }
 
